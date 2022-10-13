@@ -13,15 +13,3 @@ body
     top: 0;
     left: 0;
 }
-#con
-{
-    position: fixed;
-    top: -16.25px;
-    right: 0;
-    width: 250px;
-    height: 250px;
-    background-color: #fff8;
-    color: #fff;
-    border: 5px solid #fff4;
-    vertical-align: text-top;
-}

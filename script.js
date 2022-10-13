@@ -1,10 +1,10 @@
 let width = window.innerWidth;
 let height = window.innerHeight;
 
-let mwidth = 1000;
-let mheight = 1000;
+let mwidth = 500;
+let mheight = 500;
 let tilesize = 10;
-let viewdist = 20;
+let viewdist = 30; // Cannot be less than 20
 
 let now = performance.now();
 let last = now;
@@ -85,14 +85,16 @@ can.width = width;
 can.height = height;
 let ctx = can.getContext("2d");
 
-let fog = ctx.createRadialGradient(can.width / 2, can.height / 2, (viewdist * 0.25) * tilesize, can.width / 2, can.height / 2, viewdist * tilesize);
-fog.addColorStop(0, "#0000");
-fog.addColorStop(1, "#000");
-
 let terrain = new Array(mwidth);
 for (let i = 0; i < mwidth; i++)
 {
     terrain[i] = new Array(mheight);
+}
+
+let light = new Array(mwidth);
+for (let i = 0; i <  mwidth; i++)
+{
+    light[i] = new Array(mheight).fill(0);
 }
 
 class Player
@@ -130,7 +132,7 @@ function generate()
         {
             t++
             let output = 0;
-            output = Math.min((perlin.get(x / 10, y / 10) + 1) * 2.25, 3);
+            output = perlin.get(x / 10, y / 10) + 1.01;
             terrain[x][y] = Math.floor(output);
         }
     }
@@ -166,6 +168,15 @@ function tick()
 
     play.vx *= 0.3;
     play.vy *= 0.3;
+
+    for(let x = 0; x < mwidth; x++)
+    {
+        for(let y = 0; y < mheight; y++)
+        {
+            light[x][y] = 0;
+        }
+    }
+    lighttile(Math.round(play.x), Math.round(play.y), 20);
 }
 
 function render()
@@ -187,23 +198,23 @@ function render()
                 switch(terrain[x][y])
                 {
                     case 0:
-                        ctx.fillStyle = "#000";
+                        ctx.fillStyle = `rgb(${light[x][y] * 0.05 * 32}, ${light[x][y] * 0.05 * 32}, ${light[x][y] * 0.05 * 32})`;
                         break;
                     case 1:
-                        ctx.fillStyle = "#444";
+                        ctx.fillStyle = `rgb(${light[x][y] * 0.05 * 128}, ${light[x][y] * 0.05 * 128}, ${light[x][y] * 0.05 * 128})`;
                         break;
                     case 2:
-                        ctx.fillStyle = "#888";
+                        ctx.fillStyle = `rgb(${light[x][y] * 0.05 * 196}, ${light[x][y] * 0.05 * 196}, ${light[x][y] * 0.05 * 196})`;
                         break;
                     case 3:
-                        ctx.fillStyle = "#00f";
+                        ctx.fillStyle = `rgb(0, 0, ${light[x][y] * 0.05 * 255})`;
                         break;
                     default:
-                        ctx.fillStyle = "#f0f";
+                        ctx.fillStyle = `rgb(255, 0, 255)`;
                 }
-                ctx.strokeStyle = "#fff4";
+                //ctx.strokeStyle = "#fff4";
                 ctx.fillRect(x * tilesize - tilesize / 2 + (play.x % 1) * tilesize * 0, y * tilesize - tilesize / 2 + (play.y % 1) * tilesize * 0, tilesize, tilesize);
-                ctx.strokeRect(x * tilesize - tilesize / 2 + (play.x % 1) * tilesize * 0, y * tilesize - tilesize / 2 + (play.y % 1) * tilesize * 0, tilesize, tilesize);
+                //ctx.strokeRect(x * tilesize - tilesize / 2 + (play.x % 1) * tilesize * 0, y * tilesize - tilesize / 2 + (play.y % 1) * tilesize * 0, tilesize, tilesize);
             }
         }
     }
@@ -212,12 +223,21 @@ function render()
 
     ctx.fillStyle = "#fff8";
     ctx.fillRect(can.width / 2 - play.width / 2, can.height / 2 - play.width / 2, play.width, play.width);
-
-    ctx.fillStyle = fog;
-    ctx.fillRect(0, 0, can.width, can.height);
 }
 
 function update()
 {
 
+}
+
+function lighttile(x, y, level)
+{
+    if(light[x] != undefined) if(light[x][y] != undefined) light[x][y] = level;
+    if(level > 0)
+    {
+        if(light[x - 1] != undefined) if(light[x - 1][y] != undefined) if (light[x - 1][y] < level - 1) lighttile(x - 1, y, level - 1);
+        if(light[x + 1] != undefined) if(light[x + 1][y] != undefined) if (light[x + 1][y] < level - 1) lighttile(x + 1, y, level - 1);
+        if(light[x] != undefined) if(light[x][y - 1] != undefined) if (light[x][y - 1] < level - 1) lighttile(x, y - 1, level - 1);
+        if(light[x] != undefined) if(light[x][y + 1] != undefined) if (light[x][y + 1] < level - 1) lighttile(x, y + 1, level - 1);
+    }
 }
