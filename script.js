@@ -1,10 +1,10 @@
 let width = window.innerWidth;
 let height = window.innerHeight;
 
-let mwidth = 10;
-let mheight = 10;
-let tilesize = 50;
-let viewdist = 4;
+let mwidth = 1000;
+let mheight = 1000;
+let tilesize = 10;
+let viewdist = 20;
 
 let now = performance.now();
 let last = now;
@@ -85,7 +85,15 @@ can.width = width;
 can.height = height;
 let ctx = can.getContext("2d");
 
-let terrain = new Array(mwidth).fill(new Array(mheight).fill(0));
+let fog = ctx.createRadialGradient(can.width / 2, can.height / 2, (viewdist * 0.25) * tilesize, can.width / 2, can.height / 2, viewdist * tilesize);
+fog.addColorStop(0, "#0000");
+fog.addColorStop(1, "#000");
+
+let terrain = new Array(mwidth);
+for (let i = 0; i < mwidth; i++)
+{
+    terrain[i] = new Array(mheight);
+}
 
 class Player
 {
@@ -93,7 +101,7 @@ class Player
     {
         this.x = mwidth / 2;
         this.y = mheight / 2;
-        this.width = 50;
+        this.width = tilesize * 3;
         this.vx = 0;
         this.vy = 0;
         this.speed = 1;
@@ -116,14 +124,13 @@ generate();
 function generate()
 {
     let t = 0;
-    for(let y = 0; y < mheight; y++)
+    for(let x = 0; x < mheight; x++)
     {
-        for(let x = 0; x < mwidth; x++)
+        for(let y = 0; y < mwidth; y++)
         {
             t++
             let output = 0;
-            //output = perlin.get(Math.sin(x + 1) * Math.PI , Math.sin(y + 1) * Math.PI) + 1;
-            output = (t + x) % 3;
+            output = Math.min((perlin.get(x / 10, y / 10) + 1) * 2.25, 3);
             terrain[x][y] = Math.floor(output);
         }
     }
@@ -151,8 +158,8 @@ function tick()
 {
     ticks++;
 
-    play.vx += (a * play.speed - d * play.speed) * (0.125 * shift + 1 * !shift);
-    play.vy += (w * play.speed - s * play.speed) * (0.125 * shift + 1 * !shift);
+    play.vx -= (a * play.speed - d * play.speed) * (0.125 * shift + 1 * !shift);
+    play.vy -= (w * play.speed - s * play.speed) * (0.125 * shift + 1 * !shift);
 
     play.x += play.vx;
     play.y += play.vy;
@@ -164,18 +171,10 @@ function tick()
 function render()
 {
     ctx.clearRect(0, 0, can.width, can.height);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, can.width, can.height);
     ctx.save();
-    ctx.strokeStyle = "#000";
-    ctx.beginPath();
-    ctx.moveTo(can.width / 2, 0);
-    ctx.lineTo(can.width / 2, can.height);
-    ctx.moveTo(0, can.height / 2);
-    ctx.lineTo(can.width, can.height / 2);
-    ctx.stroke();
-    ctx.closePath();
     ctx.translate(can.width / 2 - mwidth / 2 * tilesize + (mwidth / 2 - play.x) * tilesize, can.height / 2 - mheight / 2 * tilesize + (mheight / 2 - play.y) * tilesize);
-
-
 
     for(let y = 0; y < mheight; y++)
     {
@@ -185,35 +184,37 @@ function render()
             let yr = Math.abs(play.y - y - (play.y % 1));
             if(xr <= viewdist && xr >= -viewdist && yr <= viewdist && yr >= -viewdist)
             {
-                //cons(play.x.toFixed(2) + " | " + x + " | " + xr.toFixed(2));
                 switch(terrain[x][y])
                 {
                     case 0:
                         ctx.fillStyle = "#000";
                         break;
                     case 1:
-                        ctx.fillStyle = "#00f";
+                        ctx.fillStyle = "#444";
                         break;
                     case 2:
-                        ctx.fillStyle = "#0f0";
+                        ctx.fillStyle = "#888";
                         break;
                     case 3:
-                        ctx.fillStyle = "#ff0";
+                        ctx.fillStyle = "#00f";
                         break;
                     default:
                         ctx.fillStyle = "#f0f";
                 }
-                ctx.strokeStyle = "#f00";
-                ctx.fillRect(x * tilesize - tilesize / 2 + (play.x % 1) * tilesize, y * tilesize - tilesize / 2 + (play.y % 1) * tilesize, tilesize, tilesize);
-                ctx.strokeRect(x * tilesize - tilesize / 2 + (play.x % 1) * tilesize, y * tilesize - tilesize / 2 + (play.y % 1) * tilesize, tilesize, tilesize);
+                ctx.strokeStyle = "#fff4";
+                ctx.fillRect(x * tilesize - tilesize / 2 + (play.x % 1) * tilesize * 0, y * tilesize - tilesize / 2 + (play.y % 1) * tilesize * 0, tilesize, tilesize);
+                ctx.strokeRect(x * tilesize - tilesize / 2 + (play.x % 1) * tilesize * 0, y * tilesize - tilesize / 2 + (play.y % 1) * tilesize * 0, tilesize, tilesize);
             }
         }
     }
 
     ctx.restore();
 
-    ctx.fillStyle = "#0f0";
+    ctx.fillStyle = "#fff8";
     ctx.fillRect(can.width / 2 - play.width / 2, can.height / 2 - play.width / 2, play.width, play.width);
+
+    ctx.fillStyle = fog;
+    ctx.fillRect(0, 0, can.width, can.height);
 }
 
 function update()
