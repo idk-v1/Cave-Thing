@@ -1,51 +1,50 @@
 #include "SFML/Graphics.hpp"
-#include <vector>
 #include "Perlin.h"
 #include <chrono>
+#include <iostream>
+#include <thread>
+#include <windows.h>
 
 
 const int width = 640;
 const int height = 480;
-
-sf::RenderWindow window(sf::VideoMode(width, height), "Cave Game");
-
-sf::RectangleShape rect;
-sf::RectangleShape tile;
-sf::RectangleShape player;
-sf::Transform trans;
+const int tps = 1000 / 60;
 
 int mwidth = 500;
 int mheight = 500;
 int tilesize = 10;
 int maxll = 20;
-int viewdist = 30; // Cannot be less than max light level (20)
+int viewdist = 30;
 
-long int now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
-long int last = now;
-long int delta = 0;
-long int ticks = 0;
-
-int tps = 20;
+long int now;
+long int last;
+long int delta;
+long int ticks;
 
 bool w = false;
 bool a = false;
 bool s = false;
 bool d = false;
+
+bool r = false;
+
+bool ctrl = false;
 bool shift = false;
 
-std::vector <std::vector <int>> terrain(mwidth);
-std::vector <std::vector <int>> light(mwidth);
+char** terrain = new char*[mwidth];
 
 
 class Player
 {
 public:
-	double x = std::floor(mwidth / 2);
-	double y = std::floor(mheight / 2);
+	double x = mwidth / 2;
+	double y = mheight / 2;
+	double xs = mwidth / 2;
+	double ys = mheight / 2;
 	double vx = 0;
 	double vy = 0;
 	int dir = 0;
-	double speed = 1;
+	double speed = 0.25;
 	int width = tilesize * 3;
 };
 
@@ -53,10 +52,15 @@ Player play;
 
 Perlin perlin;
 
+sf::RenderWindow window(sf::VideoMode(width, height), "Cave");
+
+sf::RectangleShape tile;
+sf::RectangleShape playtile;
+
 
 void lighttile(int x, int y, int level)
 {
-
+	/*
 	if (x < mwidth && x >= 0 && y >= 0 && y < mheight) if (terrain[x][y] != 0) light[x][y] = level;
 	if (level > 0)
 	{
@@ -65,84 +69,144 @@ void lighttile(int x, int y, int level)
 		if (x < mwidth && x >= 0 && y >= 0 && y < mheight) if (light[x][y - 1] < level - 1 && terrain[x][y - 1] != 0) lighttile(x, y - 1, level - 1);
 		if (x < mwidth && x >= 0 && y >= 0 && y < mheight) if (light[x][y + 1] < level - 1 && terrain[x][y + 1] != 0) lighttile(x, y + 1, level - 1);
 	}
+	*/
 }
 
 
 void render()
 {
 	window.clear();
-	rect.setFillColor(sf::Color(0, 0, 0));
-	window.draw(rect);
-	trans.translate(width / 2 - mwidth / 2 * tilesize + (mwidth / 2 - play.x) * tilesize, height / 2 - mheight / 2 * tilesize + (mheight / 2 - play.y) * tilesize);
 
 	for (int x = 0; x < mwidth; x++)
 	{
 		for (int y = 0; y < mheight; y++)
 		{
-			double xr = std::abs(play.x - x - fmod(play.x, 1));
-			double yr = std::abs(play.y - y - fmod(play.y, 1));
-
-			if (xr <= viewdist && xr >= -viewdist && yr <= viewdist && yr >= -viewdist)
+			if (abs(play.x - x - fmod(play.x, 1)) <= viewdist &&
+				abs(play.x - x - fmod(play.x, 1)) >= -viewdist &&
+				abs(play.y - y - fmod(play.y, 1)) <= viewdist &&
+				abs(play.y - y - fmod(play.y, 1)) >= -viewdist)
 			{
-				switch (terrain[x][y])
+
+				if (!((terrain[x][y] >> 0) & 1))
 				{
-				case 0:
-					tile.setFillColor(sf::Color(light[x][y] * 0.05 * 32, light[x][y] * 0.05 * 32, light[x][y] * 0.05 * 32));
-					break;
-				case 1:
-					tile.setFillColor(sf::Color(light[x][y] * 0.05 * 128, light[x][y] * 0.05 * 128, light[x][y] * 0.05 * 128));
-					break;
-				case 2:
-					tile.setFillColor(sf::Color(light[x][y] * 0.05 * 196, light[x][y] * 0.05 * 196, light[x][y] * 0.05 * 196));
-					break;
-				case 3:
-					tile.setFillColor(sf::Color(0, 0, light[x][y] * 0.05 * 255));
-					break;
-				default:
-					tile.setFillColor(sf::Color(255, 0, 255));
+					tile.setFillColor(sf::Color(32, 32, 32));
 				}
-				tile.setPosition(sf::Vector2f(x * tilesize - tilesize / 2, y * tilesize - tilesize / 2));
+				else 
+				{
+					tile.setFillColor(sf::Color(128, 128, 128));
+				}
+
+				tile.setPosition(sf::Vector2f((width / 2 - mwidth * 0.5 * tilesize + (mwidth / 2 - play.x) * tilesize) + (x * tilesize - tilesize / 2), (height / 2 - mheight * 0.5 * tilesize + (mheight / 2 - play.y) * tilesize) + (y * tilesize - tilesize / 2)));
 				window.draw(tile);
 			}
 		}
 	}
 
-	trans = sf::Transform::Identity;
+	playtile.setFillColor(sf::Color(255, 0, 0, 128));
+	playtile.setPosition(int (width / 2 - play.width / 2), int (height / 2 - play.width / 2));
+	window.draw(playtile);
+	
+	tile.setFillColor(sf::Color(255, 0, 0, 128));
+	switch (play.dir)
+	{
+	case 0:
+		tile.setPosition(int(width / 2 - tilesize / 2), int(height / 2 - tilesize / 2 - tilesize));
+		break;
+	case 1:
+		tile.setPosition(int(width / 2 - tilesize / 2 + tilesize), int(height / 2 - tilesize / 2));
+		break;
+	case 2:
+		tile.setPosition(int(width / 2 - tilesize / 2), int(height / 2 - tilesize / 2 + tilesize));
+		break;
+	case 3:
+		tile.setPosition(int(width / 2 - tilesize / 2 - tilesize), int(height / 2 - tilesize / 2));
+		break;
+	}
 
-	player.setFillColor(sf::Color(0, 0, 0, 128));
-	player.setPosition(width / 2 - play.width / 2, height / 2 - play.width / 2);
-	window.draw(player);
+	window.draw(tile);
+
+
+	window.display();
+}
+
+
+void clear(int dir)
+{
+	/*
+		0 = W = U
+		1 = D = R
+		2 = S = D
+		3 = A = L
+
+		4 = WD = UR
+		5 = SD = DR
+		6 = SA = DL
+		7 = WA = UL
+	*/
+
+	terrain[int(std::round(play.x)) - 1][int(std::round(play.y)) - 1] |= 1 << 0;
+	terrain[int(std::round(play.x)) + 0][int(std::round(play.y)) - 1] |= 1 << 0;
+	terrain[int(std::round(play.x)) + 1][int(std::round(play.y)) - 1] |= 1 << 0;
+	terrain[int(std::round(play.x)) - 1][int(std::round(play.y)) + 0] |= 1 << 0;
+	terrain[int(std::round(play.x)) + 0][int(std::round(play.y)) + 0] |= 1 << 0;
+	terrain[int(std::round(play.x)) + 1][int(std::round(play.y)) + 0] |= 1 << 0;
+	terrain[int(std::round(play.x)) - 1][int(std::round(play.y)) + 1] |= 1 << 0;
+	terrain[int(std::round(play.x)) + 0][int(std::round(play.y)) + 1] |= 1 << 0;
+	terrain[int(std::round(play.x)) + 1][int(std::round(play.y)) + 1] |= 1 << 0;
+
+	switch (dir)
+	{
+	case 0:
+		if (play.y - 2 <= 0)
+		{
+			terrain[int(std::round(play.x)) - 1][int(std::round(play.y)) - 2] |= 1 << 0;
+			terrain[int(std::round(play.x)) + 0][int(std::round(play.y)) - 2] |= 1 << 0;
+			terrain[int(std::round(play.x)) + 1][int(std::round(play.y)) - 2] |= 1 << 0;
+		}
+		break;
+	case 1:
+		if (play.x + 2 <= mwidth - 1)
+		{
+			terrain[int(std::round(play.x)) + 2][int(std::round(play.y)) - 1] |= 1 << 0;
+			terrain[int(std::round(play.x)) + 2][int(std::round(play.y)) + 0] |= 1 << 0;
+			terrain[int(std::round(play.x)) + 2][int(std::round(play.y)) + 1] |= 1 << 0;
+		}
+		break;
+	case 2:
+		if (play.y + 2 >= mheight - 1)
+		{
+			terrain[int(std::round(play.x)) - 1][int(std::round(play.y)) + 2] |= 1 << 0;
+			terrain[int(std::round(play.x)) + 0][int(std::round(play.y)) + 2] |= 1 << 0;
+			terrain[int(std::round(play.x)) + 1][int(std::round(play.y)) + 2] |= 1 << 0;
+		}
+		break;
+	case 3:
+		if (play.x - 2 >= 0)
+		{
+			terrain[int(std::round(play.x)) - 2][int(std::round(play.y)) - 1] |= 1 << 0;
+			terrain[int(std::round(play.x)) - 2][int(std::round(play.y)) + 0] |= 1 << 0;
+			terrain[int(std::round(play.x)) - 2][int(std::round(play.y)) + 1] |= 1 << 0;
+		}
+		break;
+	}
 }
 
 
 void generate()
 {
-	int t = 0;
 	for (int x = 0; x < mheight; x++)
 	{
 		for (int y = 0; y < mwidth; y++)
 		{
-			t++;
 			double output = 0;
-			output = perlin.noise(x / 10, y / 10, 0.1) + 1.01;
-			terrain[x][y] = std::floor(output);
+			output = perlin.noise(x * 0.05, y * 0.05, 1.1) + 1.01;
+			if (std::floor(output))
+			{
+				terrain[x][y] ^= 1 << 0;
+			}
 		}
 	}
-	terrain[std::floor(play.x) - 1][std::floor(play.y) - 1] = 1;
-	terrain[std::floor(play.x) + 0][std::floor(play.y) - 1] = 1;
-	terrain[std::floor(play.x) + 1][std::floor(play.y) - 1] = 1;
-	terrain[std::floor(play.x) - 1][std::floor(play.y) + 0] = 1;
-	terrain[std::floor(play.x) + 0][std::floor(play.y) + 0] = 1;
-	terrain[std::floor(play.x) + 1][std::floor(play.y) + 0] = 1;
-	terrain[std::floor(play.x) - 1][std::floor(play.y) + 1] = 1;
-	terrain[std::floor(play.x) + 0][std::floor(play.y) + 1] = 1;
-	terrain[std::floor(play.x) + 1][std::floor(play.y) + 1] = 1;
-}
-
-
-void update()
-{
-
+	clear(-1);
 }
 
 
@@ -150,27 +214,67 @@ void tick()
 {
 	ticks++;
 
-	play.vx -= (a * play.speed - d * play.speed) * (0.125 * shift + 1 * !shift);
-	play.vy -= (w * play.speed - s * play.speed) * (0.125 * shift + 1 * !shift);
+	play.vx -= (a * play.speed - d * play.speed) * (0.2 * shift + 1 * !shift);
+	play.vy -= (w * play.speed - s * play.speed) * (0.2 * shift + 1 * !shift);
+
+	//if (w && !d && !s && !a) play.vy -= play.speed - play.speed / 2 * shift;
+	//if (!w && d && !s && !a) play.vx += play.speed - play.speed / 2 * shift;
+	//if (!w && !d && s && !a) play.vy += play.speed - play.speed / 2 * shift;
+	//if (!w && !d && !s && a) play.vx -= play.speed - play.speed / 2 * shift;
 
 	play.x += play.vx;
 	play.y += play.vy;
+
+	if (play.x + 1 >= mwidth - 1) play.x = mwidth - 2;
+	if (play.x - 1 <= 0) play.x = 1;
+	if (play.y + 1 >= mheight - 1) play.y = mheight - 2;
+	if (play.y - 1 <= 0) play.y = 1;
+
+	if (w && !d && !s && !a) play.dir = 0;
+	if (!w && d && !s && !a) play.dir = 1;
+	if (!w && !d && s && !a) play.dir = 2;
+	if (!w && !d && !s && a) play.dir = 3;
+
+	if (ctrl)
+	{
+		clear(play.dir);
+	}
+
+	bool mu = false, mr = false, md = false, ml = false;
+
+	if (
+		(~(terrain[int(std::round(play.x)) - 1][int(std::round(play.y)) - 1] >> 0) & 1) ||
+		(~(terrain[int(std::round(play.x)) + 0][int(std::round(play.y)) - 1] >> 0) & 1) ||
+		(~(terrain[int(std::round(play.x)) + 1][int(std::round(play.y)) - 1] >> 0) & 1)
+		) mu = true;
+
+	if (
+		(~(terrain[int(std::round(play.x)) + 1][int(std::round(play.y)) - 1] >> 0) & 1) ||
+		(~(terrain[int(std::round(play.x)) + 1][int(std::round(play.y)) + 0] >> 0) & 1) ||
+		(~(terrain[int(std::round(play.x)) + 1][int(std::round(play.y)) + 1] >> 0) & 1)
+		) mr = true;
+
+	if (
+		(~(terrain[int(std::round(play.x)) - 1][int(std::round(play.y)) + 1] >> 0) & 1) ||
+		(~(terrain[int(std::round(play.x)) + 0][int(std::round(play.y)) + 1] >> 0) & 1) ||
+		(~(terrain[int(std::round(play.x)) + 1][int(std::round(play.y)) + 1] >> 0) & 1)
+		) md = true;
+
+	if (
+		(~(terrain[int(std::round(play.x)) - 1][int(std::round(play.y)) - 1] >> 0) & 1) ||
+		(~(terrain[int(std::round(play.x)) - 1][int(std::round(play.y)) + 0] >> 0) & 1) ||
+		(~(terrain[int(std::round(play.x)) - 1][int(std::round(play.y)) + 1] >> 0) & 1)
+		) ml = true;
+
+	if (mu) play.y = std::floor(play.y) + 1;
+	if (mr) play.x = std::ceil(play.x) - 1;
+	if (md) play.y = std::ceil(play.y) - 1;
+	if (ml) play.x = std::floor(play.x) + 1;
 
 	play.vx *= 0.3;
 	play.vy *= 0.3;
 
 	/*
-		0 = W = U
-		1 = D = R
-		2 = S = D
-		3 = A = L
-	*/
-
-	if (w && !s) play.dir = 0;
-	if (d && !a) play.dir = 1;
-	if (s && !w) play.dir = 2;
-	if (a && !d) play.dir = 3;
-
 	for (int x = 0; x < mwidth; x++)
 	{
 		for (int y = 0; y < mheight; y++)
@@ -178,32 +282,62 @@ void tick()
 			light[x][y] = 0;
 		}
 	}
+	*/
+
 	lighttile(round(play.x), round(play.y), 20);
+
+	//std::cout << play.x << " | " << play.y << "\n";
+	if (r)
+	{
+		play.x = play.xs;
+		play.y = play.ys;
+		play.dir = 0;
+		play.vx = 0;
+		play.vy = 0;
+	}
 }
+
+
+void key()
+{
+	if (GetAsyncKeyState(0x57) < 0) w = true;
+	if (GetAsyncKeyState(0x41) < 0) a = true;
+	if (GetAsyncKeyState(0x53) < 0) s = true;
+	if (GetAsyncKeyState(0x44) < 0) d = true;
+
+	if (GetAsyncKeyState(0x10) < 0) shift = true;
+	if (GetAsyncKeyState(0x11) < 0) ctrl = true;
+
+	if (GetAsyncKeyState(0x52) < 0) r = true;
+
+	if (GetAsyncKeyState(0x57) == 0) w = false;
+	if (GetAsyncKeyState(0x41) == 0) a = false;
+	if (GetAsyncKeyState(0x53) == 0) s = false;
+	if (GetAsyncKeyState(0x44) == 0) d = false;
+
+	if (GetAsyncKeyState(0x10) == 0) shift = false;
+	if (GetAsyncKeyState(0x11) == 0) ctrl = false;
+
+	if (GetAsyncKeyState(0x52) == 0) r = false;
+}
+
 
 int main()
 {
-	player.setSize(sf::Vector2f(play.width, play.width));
+	window.setFramerateLimit(60);
+
+	for (int x = 0; x < mwidth; x++)
+	{
+		terrain[x] = new char[mheight];
+	}
+
+	now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
+	last = now;
+	delta = 0;
+	ticks = 0;
+
+	playtile.setSize(sf::Vector2f(play.width, play.width));
 	tile.setSize(sf::Vector2f(tilesize, tilesize));
-
-	rect.setPosition(0, 0);
-	rect.setSize(sf::Vector2f(width, height));
-
-	for (int x = 0; x < mwidth; x++)
-	{
-		for (int y = 0; y < mheight; y++)
-		{
-			terrain[x].push_back(0);
-		}
-	}
-
-	for (int x = 0; x < mwidth; x++)
-	{
-		for (int y = 0; y < mheight; y++)
-		{
-			light[x].push_back(0);
-		}
-	}
 
 	generate();
 
@@ -213,32 +347,23 @@ int main()
 		while (window.pollEvent(event))
 		{
 			if (event.type == sf::Event::Closed)
-				window.close();
-
-			now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
-			delta = now - last;
-			last = now;
-
-			while (delta >= 1000 / tps)
 			{
-				delta -= 1000 / tps;
-				tick();
+				window.close();
 			}
-
-			update();
-			render();
-
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) w = true;
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) a = true;
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) s = true;
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) d = true;
-
-			if (!sf::Keyboard::isKeyPressed(sf::Keyboard::W)) w = false;
-			if (!sf::Keyboard::isKeyPressed(sf::Keyboard::A)) a = false;
-			if (!sf::Keyboard::isKeyPressed(sf::Keyboard::S)) s = false;
-			if (!sf::Keyboard::isKeyPressed(sf::Keyboard::D)) d = false;
 		}
 
+		now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
+		delta = now - last;
+		last = now;
+
+		while (delta >= tps)
+		{
+			delta -= tps;
+			tick();
+		}
+
+		key();
+		render();
 	}
 
 	return 0;
