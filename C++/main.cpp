@@ -1,341 +1,362 @@
 #include "SFML/Graphics.hpp"
 #include "Perlin.h"
 #include <chrono>
-#include <iostream>
 #include <thread>
 #include <windows.h>
+#include <vector>
+#include <iostream>
+
+const int
+WIDTH = 960,
+HEIGHT = 720;
+
+enum ID {
+// ID 0000 - Air
+// ID 0001 - Stone
+// ID 0010 - Water
+// ID 0011 - Ore
+// ID 0100 - Tree
+// ID 0101 - Light
+// ID 0110 - Bricks
+// ID 0111 - Wood
+// ID 1000 - 
+// ID 1001 - 
+// ID 1010 - 
+// ID 1011 - 
+// ID 1100 - 
+// ID 1101 - 
+// ID 1110 - 
+// ID 1111 - 
+
+	air,
+	stone,
+	water,
+	ore,
+	tree,
+	light,
+	bricks,
+	wood,
+};
+
+int
+tps = 1000 / 20,
+tileSize = 16,
+lightLevel = 16,
+viewDist = 32,
+mWidth = 500,
+mHeight = 500;
+
+long
+now,
+last,
+delta = 0,
+ticks = 0;
+
+double
+noiseLvl = 0.01;
+
+bool
+w = false,
+a = false,
+s = false,
+d = false,
+r = false,
+ctrl = false,
+shift = false,
+regenKey = false,
+lightKey = false;
+
+char**
+terrain = new char* [mWidth];
+
+class Vector
+{
+public:
+	int x;
+	int y;
+	Vector(int xPos, int yPos)
+	{
+		x = xPos;
+		y = yPos;
+	}
+};
+
+std::vector<Vector> lights;
 
 
-const int width = 640;
-const int height = 480;
-const int tps = 1000 / 60;
-
-int mwidth = 500;
-int mheight = 500;
-int tilesize = 10;
-int maxll = 20;
-int viewdist = 30;
-
-long int now;
-long int last;
-long int delta;
-long int ticks;
-
-bool w = false;
-bool a = false;
-bool s = false;
-bool d = false;
-
-bool r = false;
-
-bool ctrl = false;
-bool shift = false;
-
-char** terrain = new char*[mwidth];
+class Item
+{
+public:
+	int count = 0;
+	int id = 0;
+};
 
 
 class Player
 {
 public:
-	int x = mwidth / 2 * 10;
-	int y = mheight / 2 * 10;
-	int xs = mwidth / 2 * 10;
-	int ys = mheight / 2 * 10;
-	double vx = 0;
-	double vy = 0;
-	int dir = 0;
-	double speed = 0.25;
-	int width = tilesize * 3;
-	bool cr = false;
-	bool cd = false;
-	bool cl = false;
-	bool cu = false;
-	double dt = 0;
-	double ms = 1;
+	int
+		xVelo = 0,
+		yVelo = 0,
+		x = int(mWidth / 2),
+		y = int(mHeight / 2),
+		xStart = int(mWidth / 2),
+		yStart = int(mHeight / 2),
+		dir = -1,
+		width = tileSize * 3,
+		destroyTime = 0,
+		mineSpeed = 0,
+		speed = 1,
+		health = 50,
+		invNum = 0;
+
+	Item
+		inv[256];
+
+	bool
+		light = true;
 };
 
-Player play;
 
 Perlin perlin;
 
-sf::RenderWindow window(sf::VideoMode(width, height), "Cave");
+Player play;
 
-sf::RectangleShape tile;
-sf::RectangleShape playtile;
+sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "Cave");
+
+sf::Texture* tex[16];
+
+sf::RectangleShape
+tile,
+playTile,
+invTile,
+invTileItem;
 
 
-void lighttile(int x, int y, int level)
+int getLight(int xTile, int yTile)
 {
-	/*
-	if (x < mwidth && x >= 0 && y >= 0 && y < mheight) if (terrain[x][y] != 0) light[x][y] = level;
-	if (level > 0)
-	{
-		if (x < mwidth && x >= 0 && y >= 0 && y < mheight) if (light[x - 1][y] < level - 1 && terrain[x - 1][y] != 0) lighttile(x - 1, y, level - 1);
-		if (x < mwidth && x >= 0 && y >= 0 && y < mheight) if (light[x + 1][y] < level - 1 && terrain[x + 1][y] != 0) lighttile(x + 1, y, level - 1);
-		if (x < mwidth && x >= 0 && y >= 0 && y < mheight) if (light[x][y - 1] < level - 1 && terrain[x][y - 1] != 0) lighttile(x, y - 1, level - 1);
-		if (x < mwidth && x >= 0 && y >= 0 && y < mheight) if (light[x][y + 1] < level - 1 && terrain[x][y + 1] != 0) lighttile(x, y + 1, level - 1);
-	}
-	*/
+	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
+		return
+		((terrain[xTile][yTile] >> 4) & 1) +
+		((terrain[xTile][yTile] >> 5) & 1) * 2 +
+		((terrain[xTile][yTile] >> 6) & 1) * 4 +
+		((terrain[xTile][yTile] >> 7) & 1) * 8;
+	else return -1;
 }
 
 
-void render()
+int getID(int xTile, int yTile)
 {
-	window.clear();
+	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
+		return
+		((terrain[xTile][yTile] >> 0) & 1) +
+		((terrain[xTile][yTile] >> 1) & 1) * 2 +
+		((terrain[xTile][yTile] >> 2) & 1) * 4 +
+		((terrain[xTile][yTile] >> 3) & 1) * 8;
+	else return -1;
+}
 
-	for (int x = 0; x < mwidth; x++)
+
+void setLight(int xTile, int yTile, int Level)
+{
+	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
 	{
-		for (int y = 0; y < mheight; y++)
+		terrain[xTile][yTile] &= ~(1 << 7);
+		terrain[xTile][yTile] &= ~(1 << 6);
+		terrain[xTile][yTile] &= ~(1 << 5);
+		terrain[xTile][yTile] &= ~(1 << 4);
+
+		if (Level >= 8) { Level -= 8; terrain[xTile][yTile] |= 1 << 7; }
+		else terrain[xTile][yTile] |= 0 << 7;
+		if (Level >= 4) { Level -= 4; terrain[xTile][yTile] |= 1 << 6; }
+		else terrain[xTile][yTile] |= 0 << 6;
+		if (Level >= 2) { Level -= 2; terrain[xTile][yTile] |= 1 << 5; }
+		else terrain[xTile][yTile] |= 0 << 5;
+		if (Level >= 1) { Level -= 1; terrain[xTile][yTile] |= 1 << 4; }
+		else terrain[xTile][yTile] |= 0 << 4;
+	}
+}
+
+
+void resetLight(bool init)
+{
+	if (init)
+	{
+		for (int x = 0; x < mWidth; x++)
 		{
-			// Check if tile is in view distance
-			if (abs(play.x * 0.1 - x - fmod(play.x * 0.1, 1)) <= viewdist &&
-				abs(play.x * 0.1 - x - fmod(play.x * 0.1, 1)) >= -viewdist &&
-				abs(play.y * 0.1 - y - fmod(play.y * 0.1, 1)) <= viewdist &&
-				abs(play.y * 0.1 - y - fmod(play.y * 0.1, 1)) >= -viewdist)
+			for (int y = 0; y < mHeight; y++)
 			{
-
-				if (!((terrain[x][y] >> 0) & 1))
-				{
-					tile.setFillColor(sf::Color(32, 32, 32));
-				}
-				else 
-				{
-					tile.setFillColor(sf::Color(128, 128, 128));
-				}
-
-				tile.setPosition(sf::Vector2f(
-					(width / 2 - mwidth * 0.5 * tilesize + (mwidth / 2 - play.x * 0.1) * tilesize) + (double(x) * tilesize - tilesize / 2.0), 
-					(height / 2 - mheight * 0.5 * tilesize + (mheight / 2 - play.y * 0.1) * tilesize) + (double(y) * tilesize - tilesize / 2)));
-				window.draw(tile);
+				if (x >= 0 && x < mWidth && y >= 0 && y < mHeight)
+					terrain[x][y] = (char)getID(x, y);
 			}
 		}
 	}
-
-	// Draws Player
-	playtile.setFillColor(sf::Color(255, 0, 0, 128));
-	playtile.setPosition(int (width / 2 - play.width / 2), int (height / 2 - play.width / 2));
-	window.draw(playtile);
-	
-	// Draws Player Eye
-	tile.setFillColor(sf::Color(0, 0, 255, 128));
-	switch (play.dir)
+	else
 	{
-	case 0:
-		tile.setPosition(int(width / 2 - tilesize / 2), int(height / 2 - tilesize / 2 - tilesize));
-		break;
-	case 1:
-		tile.setPosition(int(width / 2 - tilesize / 2 + tilesize), int(height / 2 - tilesize / 2));
-		break;
-	case 2:
-		tile.setPosition(int(width / 2 - tilesize / 2), int(height / 2 - tilesize / 2 + tilesize));
-		break;
-	case 3:
-		tile.setPosition(int(width / 2 - tilesize / 2 - tilesize), int(height / 2 - tilesize / 2));
-		break;
-	case 4:
-		tile.setPosition(int(width / 2 - tilesize / 2 + tilesize), int(height / 2 - tilesize / 2 - tilesize));
-		break;
-	case 5:
-		tile.setPosition(int(width / 2 - tilesize / 2 + tilesize), int(height / 2 - tilesize / 2 + tilesize));
-		break;
-	case 6:
-		tile.setPosition(int(width / 2 - tilesize / 2 - tilesize), int(height / 2 - tilesize / 2 + tilesize));
-		break;
-	case 7:
-		tile.setPosition(int(width / 2 - tilesize / 2 - tilesize), int(height / 2 - tilesize / 2 - tilesize));
-		break;
-	default:
-		tile.setPosition(int(width / 2 - tilesize / 2), int(height / 2 - tilesize / 2));
+		for (int x = play.x - viewDist; x < play.x + viewDist; x++)
+		{
+			for (int y = play.y - viewDist; y < play.y + viewDist; y++)
+			{
+				if (x >= 0 && x < mWidth && y >= 0 && y < mHeight)
+					terrain[x][y] = (char)getID(x, y);
+			}
+		}
 	}
-
-	window.draw(tile);
-
-	window.display();
 }
 
 
-void cleart(int x, int y)
+void setID(int xTile, int yTile, int Value)
 {
-	terrain[int(std::round(play.x * 0.1)) - x][int(std::round(play.y * 0.1)) - y] |= 1 << 0;
-}
-
-
-void clear(int dir)
-{
-	/*
-		0 = W = U
-		1 = D = R
-		2 = S = D
-		3 = A = L
-
-		4 = WD = UR
-		5 = SD = DR
-		6 = SA = DL
-		7 = WA = UL
-	*/
-
-	for (int x = -1; x < 2; x++) for (int y = -1; y < 2; y++) cleart(x, y);
-
-	switch (dir)
+	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
 	{
-	case 0:
-		if (play.y * 0.1 - 2 <= 0)
-		{
-			for (int x = -1; x < 2; x++) cleart(x, -2);
-		}
-		break;
-	case 1:
-		if (play.x * 0.1 + 2 <= mwidth - 1.0)
-		{
-			for (int y = -1; y < 2; y++) cleart(-2, y);
-		}
-		break;
-	case 2:
-		if (play.y * 0.1 + 2 >= mheight - 1.0)
-		{
-			for (int x = -1; x < 2; x++) cleart(x, 2);
-		}
-		break;
-	case 3:
-		if (play.x * 0.1 - 2 >= 0)
-		{
-			for (int y = -1; y < 2; y++) cleart(2, y);
-		}
-		break;
+		terrain[xTile][yTile] &= ~(1 << 3);
+		terrain[xTile][yTile] &= ~(1 << 2);
+		terrain[xTile][yTile] &= ~(1 << 1);
+		terrain[xTile][yTile] &= ~(1 << 0);
+
+		if (Value >= 8) {Value -= 8; terrain[xTile][yTile] |= 1 << 3;} else terrain[xTile][yTile] |= 0 << 3;
+		if (Value >= 4) {Value -= 4; terrain[xTile][yTile] |= 1 << 2;} else terrain[xTile][yTile] |= 0 << 2;
+		if (Value >= 2) {Value -= 2; terrain[xTile][yTile] |= 1 << 1;} else terrain[xTile][yTile] |= 0 << 1;
+		if (Value >= 1) {Value -= 1; terrain[xTile][yTile] |= 1 << 0;} else terrain[xTile][yTile] |= 0 << 0;
 	}
-	
 }
 
 
 void generate()
 {
-	for (int x = 0; x < mheight; x++)
+	for (int x = 0; x < mWidth; x++)
 	{
-		for (int y = 0; y < mwidth; y++)
+		for (int y = 0; y < mHeight; y++)
 		{
-			double output = 0;
-			output = perlin.noise(x * 0.025, y * 0.025, 1.1) + 1.125;
-			if (std::floor(output))
+			// Bit 0 - ID 1
+			// Bit 1 - ID 2
+			// Bit 2 - ID 4
+			// Bit 3 - ID 8
+			// Bit 4 - Light 1
+			// Bit 5 - Light 2
+			// Bit 6 - Light 4
+			// Bit 7 - Light 8
+
+			// Get Noise from Coordinate
+			if (!std::floor(perlin.noise(x * 0.025, y * 0.025, noiseLvl) + 1.0625))
 			{
-				terrain[x][y] ^= 1 << 0;
+				setID(x, y, 0);
+			}
+			else 
+			{
+				setID(x, y, 1);
 			}
 		}
 	}
-	clear(-1);
+	resetLight(true);
+	for (int x = -1; x < 2; x++)
+		for (int y = -1; y < 2; y++)
+			setID(play.x - x, play.y - y, 0);
 }
 
 
-void tick()
+void render()
 {
-	ticks++;
+	double light;
+	window.clear();
 
-	// Set Velocity
-	play.vx -= ((a * play.speed * !play.cl - d * play.speed * !play.cr) * !shift);
-	play.vy -= ((w * play.speed * !play.cu - s * play.speed * !play.cd) * !shift);
-
-	play.x += int (play.vx * 10);
-	play.y += int (play.vy * 10);
-
-	// Prevent Player from leaving map
-	if (play.x * 0.1 + 1 >= mwidth - 1.0) play.x = mwidth - 20;
-	if (play.x * 0.1 - 1 <= 0) play.x = 10;
-	if (play.y * 0.1 + 1 >= mheight - 1.0) play.y = mheight - 20;
-	if (play.y * 0.1 - 1 <= 0) play.y = 10;
-
-	// Set Player Direction
-	play.dir = -1;
-	if (w && !d && !a) play.dir = 0;
-	if (d && !s && !w) play.dir = 1;
-	if (s && !d && !a) play.dir = 2;
-	if (a && !w && !s) play.dir = 3;
-	if (w && d) play.dir = 4;
-	if (s && d) play.dir = 5;
-	if (s && a) play.dir = 6;
-	if (w && a) play.dir = 7;
-
-	// Removes blocks
-	if (ctrl)
+	for (int x = play.x - viewDist; x < play.x + viewDist; x++)
 	{
-		play.dt += play.ms;
-		if (play.dt >= 20)
+		for (int y = play.y - viewDist; y < play.y + viewDist; y++)
 		{
-			clear(play.dir);
-			play.dt = 0;
+			if (x >= 0 && x < mWidth && y >= 0 && y < mHeight)
+			{
+				light = std::ceil((getLight(x, y) + 1) / 2.0) * 2.0 / 16.0;
+				tile.setFillColor(sf::Color(std::ceil(255 * light), std::ceil(255 * light), std::ceil(255 * light)));
+				tile.setTexture(tex[getID(x, y)]);
+				tile.setPosition(sf::Vector2f((WIDTH * 0.5 - mWidth * 0.5 * tileSize + (mWidth / 2 - play.x) * tileSize) + (x * tileSize - tileSize * 0.5), (HEIGHT * 0.5 - mHeight * 0.5 * tileSize + (mHeight / 2 - play.y) * tileSize) + (y * tileSize - tileSize * 0.5)));
+				window.draw(tile);
+			}
 		}
 	}
-	else
+
+	light = std::ceil((getLight(play.x, play.y) + 1) / 2.0) * 2.0 / 16.0;
+	if (play.light) playTile.setFillColor(sf::Color(64, 192, 224));
+	else playTile.setFillColor(sf::Color(64 * light, 192 * light, 224 * light));
+	playTile.setPosition(int(WIDTH / 2 - play.width / 2), int(HEIGHT / 2 - play.width / 2));
+	window.draw(playTile);
+
+	switch (play.dir)
 	{
-		play.dt = 0;
+	case 0:
+		tile.setPosition(int(WIDTH / 2 - tileSize / 2), int(HEIGHT / 2 - tileSize / 2 - tileSize));
+		playTile.setPosition(sf::Vector2f(WIDTH / 2 - tileSize / 2 - tileSize, HEIGHT / 2 - tileSize / 2 - play.width - tileSize));
+		break;
+	case 1:
+		tile.setPosition(int(WIDTH / 2 - tileSize / 2 + tileSize), int(HEIGHT / 2 - tileSize / 2 - tileSize));
+		break;
+	case 2:
+		tile.setPosition(int(WIDTH / 2 - tileSize / 2 + tileSize), int(HEIGHT / 2 - tileSize / 2));
+		playTile.setPosition(sf::Vector2f(WIDTH / 2 - tileSize / 2 + play.width - tileSize, HEIGHT / 2 - tileSize / 2 - tileSize));
+		break;
+	case 3:
+		tile.setPosition(int(WIDTH / 2 - tileSize / 2 + tileSize), int(HEIGHT / 2 - tileSize / 2 + tileSize));
+		break;
+	case 4:
+		tile.setPosition(int(WIDTH / 2 - tileSize / 2), int(HEIGHT / 2 - tileSize / 2 + tileSize));
+		playTile.setPosition(sf::Vector2f(WIDTH / 2 - tileSize / 2 - tileSize, HEIGHT / 2 - tileSize / 2 + play.width - tileSize));
+		break;
+	case 5:
+		tile.setPosition(int(WIDTH / 2 - tileSize / 2 - tileSize), int(HEIGHT / 2 - tileSize / 2 + tileSize));
+		break;
+	case 6:
+		tile.setPosition(int(WIDTH / 2 - tileSize / 2 - tileSize), int(HEIGHT / 2 - tileSize / 2));
+		playTile.setPosition(sf::Vector2f(WIDTH / 2 - tileSize / 2 - play.width - tileSize, HEIGHT / 2 - tileSize / 2 - tileSize));
+		break;
+	case 7:
+		tile.setPosition(int(WIDTH / 2 - tileSize / 2 - tileSize), int(HEIGHT / 2 - tileSize / 2 - tileSize));
+		break;
+	default:
+		tile.setPosition(int(WIDTH / 2 - tileSize / 2), int(HEIGHT / 2 - tileSize / 2));
 	}
 
-	play.cr = false;
-	play.cd = false;
-	play.cl = false;
-	play.cu = false;
+	tile.setFillColor(sf::Color(96, 224, 255));
+	tile.setTexture(tex[0]);
+	window.draw(tile);
 
-	// Checks Top Collision
-	if (
-		(~(terrain[int(std::round(play.x * 0.1)) - 1][int(std::round(play.y * 0.1)) - 1] >> 0) & 1) ||
-		(~(terrain[int(std::round(play.x * 0.1)) + 0][int(std::round(play.y * 0.1)) - 1] >> 0) & 1) ||
-		(~(terrain[int(std::round(play.x * 0.1)) + 1][int(std::round(play.y * 0.1)) - 1] >> 0) & 1)
-		) play.cu = true;
-
-	// Checks Down Collision
-	if (
-		(~(terrain[int(std::round(play.x * 0.1)) - 1][int(std::round(play.y * 0.1)) + 1] >> 0) & 1) ||
-		(~(terrain[int(std::round(play.x * 0.1)) + 0][int(std::round(play.y * 0.1)) + 1] >> 0) & 1) ||
-		(~(terrain[int(std::round(play.x * 0.1)) + 1][int(std::round(play.y * 0.1)) + 1] >> 0) & 1)
-		) play.cd = true;
-
-	// Checks Left Collision
-	if (
-		(~(terrain[int(std::round(play.x * 0.1)) - 1][int(std::round(play.y * 0.1)) - 1] >> 0) & 1) ||
-		(~(terrain[int(std::round(play.x * 0.1)) - 1][int(std::round(play.y * 0.1)) + 0] >> 0) & 1) ||
-		(~(terrain[int(std::round(play.x * 0.1)) - 1][int(std::round(play.y * 0.1)) + 1] >> 0) & 1)
-		) play.cl = true;
-
-	// Checks Right Collision
-	if (
-		(~(terrain[int(std::round(play.x * 0.1)) + 1][int(std::round(play.y * 0.1)) - 1] >> 0) & 1) ||
-		(~(terrain[int(std::round(play.x * 0.1)) + 1][int(std::round(play.y * 0.1)) + 0] >> 0) & 1) ||
-		(~(terrain[int(std::round(play.x * 0.1)) + 1][int(std::round(play.y * 0.1)) + 1] >> 0) & 1)
-		) play.cr = true;
-
-	if (play.cu) play.y += 1;
-	if (play.cd) play.y -= 1;
-	if (play.cl) play.x += 1;
-	if (play.cr) play.x -= 1;
-
-	// Apply Friction
-	play.vx *= 0.3;
-	play.vy *= 0.3;
-
-	/*
-	for (int x = 0; x < mwidth; x++)
+	if (play.dir == 0 || play.dir == 2 || play.dir == 4 || play.dir == 6)
 	{
-		for (int y = 0; y < mheight; y++)
-		{
-			light[x][y] = 0;
-		}
+		playTile.setFillColor(sf::Color(255, 0, 0, 128 * play.destroyTime * 0.1));
+		window.draw(playTile);
 	}
-	*/
 
-	//lighttile(round(play.x), round(play.y), 20);
-
-	// Reset Player
-	if (r)
+	for (int i = 0; i < 9; i++)
 	{
-		play.x = play.xs;
-		play.y = play.ys;
-		play.dir = 0;
-		play.vx = 0;
-		play.vy = 0;
+		if (play.invNum == 8 - i) invTile.setFillColor(sf::Color(96, 96, 96));
+		else invTile.setFillColor(sf::Color(64, 64, 64));
+		invTile.setPosition(WIDTH / 2 - (i - 4) * 55 - 25, HEIGHT - 75);
+		window.draw(invTile);
+		invTileItem.setFillColor(sf::Color(255, 255, 255));
+		invTileItem.setTexture(tex[play.inv[8 - i].id]);
+		invTileItem.setPosition(WIDTH / 2 - (i - 4) * 55 - 16, HEIGHT - 75 + 9);
+		window.draw(invTileItem);
 	}
+
+	window.display();
 }
 
 
 void key()
 {
+	// "0xnn < 0" Means Key is Down
+	// "0xnn == 0" Means Key is Up
+
+	if (GetAsyncKeyState(0x30) < 0) play.invNum = -1;
+	if (GetAsyncKeyState(0x31) < 0) play.invNum = 0;
+	if (GetAsyncKeyState(0x32) < 0) play.invNum = 1;
+	if (GetAsyncKeyState(0x33) < 0) play.invNum = 2;
+	if (GetAsyncKeyState(0x34) < 0) play.invNum = 3;
+	if (GetAsyncKeyState(0x35) < 0) play.invNum = 4;
+	if (GetAsyncKeyState(0x36) < 0) play.invNum = 5;
+	if (GetAsyncKeyState(0x37) < 0) play.invNum = 6;
+	if (GetAsyncKeyState(0x38) < 0) play.invNum = 7;
+	if (GetAsyncKeyState(0x39) < 0) play.invNum = 8;
+
 	if (GetAsyncKeyState(0x57) < 0) w = true;
 	if (GetAsyncKeyState(0x41) < 0) a = true;
 	if (GetAsyncKeyState(0x53) < 0) s = true;
@@ -359,24 +380,219 @@ void key()
 }
 
 
+void lightDiamond(int xTile, int yTile, int Value)
+{
+	if (Value > 0)
+	{
+		if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
+		{
+			setLight(xTile, yTile, Value);
+			if (Value > getLight(xTile, yTile - 1) && (getID(xTile, yTile) == 0 || getID(xTile, yTile) == 5)) lightDiamond(xTile, yTile - 1, Value - 1);
+			if (Value > getLight(xTile + 1, yTile) && (getID(xTile, yTile) == 0 || getID(xTile, yTile) == 5)) lightDiamond(xTile + 1, yTile, Value - 1);
+			if (Value > getLight(xTile, yTile + 1) && (getID(xTile, yTile) == 0 || getID(xTile, yTile) == 5)) lightDiamond(xTile, yTile + 1, Value - 1);
+			if (Value > getLight(xTile - 1, yTile) && (getID(xTile, yTile) == 0 || getID(xTile, yTile) == 5)) lightDiamond(xTile - 1, yTile, Value - 1);
+		}
+	}
+}
+
+
+void tick()
+{
+	// For Future Use
+	ticks++;
+
+	// Set Player Velocity
+	play.xVelo -= (a * play.speed - d * play.speed);
+	play.yVelo -= (w * play.speed - s * play.speed);
+
+	// Change Tiles
+	if (ctrl)
+	{
+		play.destroyTime++;
+		if (play.destroyTime >= 10)
+		{
+			play.destroyTime = 0;
+
+			int xDir = 0;
+			int yDir = 0;
+
+			switch (play.dir)
+			{
+			case 0:
+				yDir = -1;
+				break;
+			case 2:
+				xDir = 1;
+				break;
+			case 4:
+				yDir = 1;
+				break;
+			case 6:
+				xDir = -1;
+			}
+
+			int itemid;
+			if (play.invNum == -1) setID(play.x + 3 * xDir, play.y + 3 * yDir, 0);
+			if (play.inv[play.invNum].id == 5)
+			{
+				if (getID(play.x + 3 * xDir, play.y + 3 * yDir) == 0) 
+					setID(play.x + 3 * xDir, play.y + 3 * yDir, 5);
+			}
+			else
+			{
+				itemid = play.inv[play.invNum].id;
+				if (itemid != 5) for (int x = -1; x < 2; x++) for (int y = -1; y < 2; y++)
+					setID(play.x - x + 3 * xDir, play.y - y + 3 * yDir, itemid);
+			}
+		}
+	}
+	else play.destroyTime = 0;
+
+	if (shift && !lightKey) play.light = !play.light;
+	lightKey = shift;
+	
+	// Move Player
+	if (play.xVelo > 0)
+	{
+		for (int x = 0; x < play.xVelo; x++)
+		{
+			if (play.x + 2 < mWidth) if (
+				(getID(play.x + 2, play.y - 1) == 0 || getID(play.x + 2, play.y - 1) == 5) &&
+				(getID(play.x + 2, play.y) == 0 || getID(play.x + 2, play.y) == 5) &&
+				(getID(play.x + 2, play.y + 1) == 0 || getID(play.x + 2, play.y + 1) == 5)
+				) play.x++;
+		}
+	}
+	if (play.xVelo < 0)
+	{
+		for (int x = 0; x > play.xVelo; x--)
+		{
+			if (play.x - 1 > 0) if (
+				(getID(play.x - 2, play.y - 1) == 0 || getID(play.x - 2, play.y - 1) == 5) &&
+				(getID(play.x - 2, play.y) == 0 || getID(play.x - 2, play.y) == 5) &&
+				(getID(play.x - 2, play.y + 1) == 0 || getID(play.x - 2, play.y + 1) == 5)
+				) play.x--;
+		}
+	}
+	if (play.yVelo > 0)
+	{
+		for (int y = 0; y < play.yVelo; y++)
+		{
+			if (play.y + 1 <= mHeight) if (
+				(getID(play.x - 1, play.y + 2) == 0 || getID(play.x - 1, play.y + 2) == 5) &&
+				(getID(play.x, play.y + 2) == 0 || getID(play.x, play.y + 2) == 5) &&
+				(getID(play.x + 1, play.y + 2) == 0 || getID(play.x + 1, play.y + 2) == 5)
+				) play.y++;
+		}
+	}
+	if (play.yVelo < 0)
+	{
+		for (int y = 0; y > play.yVelo; y--)
+		{
+			if (play.y - 1 > 0) if (
+				(getID(play.x - 1, play.y - 2) == 0 || getID(play.x - 1, play.y - 2) == 5) &&
+				(getID(play.x, play.y - 2) == 0 || getID(play.x, play.y - 2) == 5) &&
+				(getID(play.x + 1, play.y - 2) == 0 || getID(play.x + 1, play.y - 2) == 5)
+				) play.y--;
+		}
+	}
+
+	// Correct Out-of-Bounds Movement
+	if (play.x <= 0 + 1) play.x = 0 + 1;
+	if (play.x > mWidth - 2) play.x = mWidth - 2;
+	if (play.y - 1 <= 0) play.y = 1;
+	if (play.y + 2 > mHeight) play.y = mHeight - 2;
+
+	// Set Player Direction
+	if (w && !d && !a) play.dir = 0;
+	if (w && d) play.dir = 1;
+	if (d && !w && !s) play.dir = 2;
+	if (d && s) play.dir = 3;
+	if (s && !a && !d) play.dir = 4;
+	if (s && a) play.dir = 5;
+	if (a && !w && !s) play.dir = 6;
+	if (a && w) play.dir = 7;
+
+	// Apply Friction
+	play.xVelo = play.xVelo * 0.25;
+	play.yVelo = play.yVelo * 0.25;
+
+	// Reset Map
+	if (r && !regenKey)
+	{
+		play.x = play.xStart;
+		play.y = play.yStart;
+		play.xVelo = 0;
+		play.yVelo = 0;
+		play.health = 50;
+		play.dir = -1;
+		if (shift)
+		{
+			noiseLvl++;
+			generate();
+		}
+	}
+	regenKey = r;
+
+	// Set Lights
+	/*for (int x = 0; x < mWidth; x++)
+	{
+		for (int y = 0; y < mHeight; y++)
+		{
+			setLight(x, y, 0);
+		}
+	}*/
+	resetLight(false);
+	if (play.light) lightDiamond(play.x, play.y, 15);
+
+	for (int x = play.x - viewDist - 15; x < play.x + viewDist + 15; x++)
+	{
+		for (int y = play.y - viewDist - 15; y < play.y + viewDist + 15; y++)
+		{
+			if (getID(x, y) == 5)
+			{
+				lightDiamond(x, y, 12);
+			}
+		}
+	}
+}
+
+
 int main()
 {
+	window.setPosition(sf::Vector2i(window.getPosition().x, 0));
 	window.setFramerateLimit(60);
 
-	for (int x = 0; x < mwidth; x++)
-	{
-		terrain[x] = new char[mheight];
-	}
+	tex[0] = new sf::Texture; tex[0]->loadFromFile("res/air.png");
+	tex[1] = new sf::Texture; tex[1]->loadFromFile("res/stone.png");
+	tex[2] = new sf::Texture; tex[2]->loadFromFile("res/air.png");
+	tex[3] = new sf::Texture; tex[3]->loadFromFile("res/air.png");
+	tex[4] = new sf::Texture; tex[4]->loadFromFile("res/air.png");
+	tex[5] = new sf::Texture; tex[5]->loadFromFile("res/light.png");
+
+	playTile.setSize(sf::Vector2f(play.width, play.width));
+	tile.setSize(sf::Vector2f(tileSize, tileSize));
+	invTile.setSize(sf::Vector2f(50, 50));
+	invTileItem.setSize(sf::Vector2f(32, 32));
+
+
+	for (int x = 0; x < mWidth; x++) terrain[x] = new char[mHeight];
+
+	generate();
+
+	play.inv[0].count = 100;
+	play.inv[0].id = 1;
+	play.inv[1].count = 100;
+	play.inv[1].id = 5;
+	play.inv[2].count = 100;
+	play.inv[2].id = 0;
+	play.inv[3].count = 100;
+	play.inv[3].id = 0;
+	play.inv[4].count = 100;
+	play.inv[4].id = 0;
 
 	now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
 	last = now;
-	delta = 0;
-	ticks = 0;
-
-	playtile.setSize(sf::Vector2f(play.width, play.width));
-	tile.setSize(sf::Vector2f(tilesize, tilesize));
-
-	generate();
 
 	while (window.isOpen())
 	{
@@ -389,17 +605,21 @@ int main()
 			}
 		}
 
+		// Get Current Time
 		now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
-		delta = now - last;
+		delta += now - last;
 		last = now;
 
+		// Update Catch-Up Loop
 		while (delta >= tps)
 		{
 			delta -= tps;
 			tick();
 		}
 
+		// Gets Keyboard Input
 		key();
+		// Draws Tiles
 		render();
 	}
 
