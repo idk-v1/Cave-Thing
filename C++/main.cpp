@@ -3,8 +3,8 @@
 #include <chrono>
 #include <thread>
 #include <windows.h>
-#include <vector>
 #include <iostream>
+#include <sstream>
 
 const int
 WIDTH = 960,
@@ -55,6 +55,8 @@ ticks = 0;
 double
 noiseLvl = 0.01;
 
+std::stringstream ss;
+
 bool
 w = false,
 a = false,
@@ -66,8 +68,9 @@ shift = false,
 regenKey = false,
 lightKey = false;
 
-char**
-terrain = new char* [mWidth];
+char** terrain = new char* [mWidth];
+char** lights = new char* [mWidth];
+
 
 class Vector
 {
@@ -80,8 +83,6 @@ public:
 		y = yPos;
 	}
 };
-
-std::vector<Vector> lights;
 
 
 class Item
@@ -102,7 +103,7 @@ public:
 		y = int(mHeight / 2),
 		xStart = int(mWidth / 2),
 		yStart = int(mHeight / 2),
-		dir = -1,
+		dir = 0,
 		width = tileSize * 3,
 		destroyTime = 0,
 		mineSpeed = 0,
@@ -124,6 +125,10 @@ Player play;
 
 sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "Cave");
 
+sf::Font font;
+
+sf::Text debug;
+
 sf::Texture* tex[16];
 
 sf::RectangleShape
@@ -137,10 +142,10 @@ int getLight(int xTile, int yTile)
 {
 	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
 		return
-		((terrain[xTile][yTile] >> 4) & 1) +
-		((terrain[xTile][yTile] >> 5) & 1) * 2 +
-		((terrain[xTile][yTile] >> 6) & 1) * 4 +
-		((terrain[xTile][yTile] >> 7) & 1) * 8;
+		((lights[xTile][yTile] >> 0) & 1) +
+		((lights[xTile][yTile] >> 1) & 1) * 2 +
+		((lights[xTile][yTile] >> 2) & 1) * 4 +
+		((lights[xTile][yTile] >> 3) & 1) * 8;
 	else return -1;
 }
 
@@ -161,19 +166,19 @@ void setLight(int xTile, int yTile, int Level)
 {
 	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
 	{
-		terrain[xTile][yTile] &= ~(1 << 7);
-		terrain[xTile][yTile] &= ~(1 << 6);
-		terrain[xTile][yTile] &= ~(1 << 5);
-		terrain[xTile][yTile] &= ~(1 << 4);
+		lights[xTile][yTile] &= ~(1 << 3);
+		lights[xTile][yTile] &= ~(1 << 2);
+		lights[xTile][yTile] &= ~(1 << 1);
+		lights[xTile][yTile] &= ~(1 << 0);
 
-		if (Level >= 8) { Level -= 8; terrain[xTile][yTile] |= 1 << 7; }
-		else terrain[xTile][yTile] |= 0 << 7;
-		if (Level >= 4) { Level -= 4; terrain[xTile][yTile] |= 1 << 6; }
-		else terrain[xTile][yTile] |= 0 << 6;
-		if (Level >= 2) { Level -= 2; terrain[xTile][yTile] |= 1 << 5; }
-		else terrain[xTile][yTile] |= 0 << 5;
-		if (Level >= 1) { Level -= 1; terrain[xTile][yTile] |= 1 << 4; }
-		else terrain[xTile][yTile] |= 0 << 4;
+		if (Level >= 8) { Level -= 8; lights[xTile][yTile] |= 1 << 3; }
+		else lights[xTile][yTile] |= 0 << 3;
+		if (Level >= 4) { Level -= 4; lights[xTile][yTile] |= 1 << 2; }
+		else lights[xTile][yTile] |= 0 << 2;
+		if (Level >= 2) { Level -= 2; lights[xTile][yTile] |= 1 << 1; }
+		else lights[xTile][yTile] |= 0 << 1;
+		if (Level >= 1) { Level -= 1; lights[xTile][yTile] |= 1 << 0; }
+		else lights[xTile][yTile] |= 0 << 0;
 	}
 }
 
@@ -187,7 +192,7 @@ void resetLight(bool init)
 			for (int y = 0; y < mHeight; y++)
 			{
 				if (x >= 0 && x < mWidth && y >= 0 && y < mHeight)
-					terrain[x][y] = (char)getID(x, y);
+					lights[x][y] = (char)0;
 			}
 		}
 	}
@@ -198,7 +203,7 @@ void resetLight(bool init)
 			for (int y = play.y - viewDist; y < play.y + viewDist; y++)
 			{
 				if (x >= 0 && x < mWidth && y >= 0 && y < mHeight)
-					terrain[x][y] = (char)getID(x, y);
+					lights[x][y] = (char)0;
 			}
 		}
 	}
@@ -276,8 +281,7 @@ void render()
 	}
 
 	light = std::ceil((getLight(play.x, play.y) + 1) / 2.0) * 2.0 / 16.0;
-	if (play.light) playTile.setFillColor(sf::Color(64, 192, 224));
-	else playTile.setFillColor(sf::Color(64 * light, 192 * light, 224 * light));
+	playTile.setFillColor(sf::Color(64 * light, 192 * light, 224 * light));
 	playTile.setPosition(int(WIDTH / 2 - play.width / 2), int(HEIGHT / 2 - play.width / 2));
 	window.draw(playTile);
 
@@ -336,6 +340,11 @@ void render()
 		invTileItem.setPosition(WIDTH / 2 - (i - 4) * 55 - 16, HEIGHT - 75 + 9);
 		window.draw(invTileItem);
 	}
+
+	ss.str("");
+	ss << "X: " << play.x << " Y: " << play.y;
+	debug.setString(ss.str());
+	window.draw(debug);
 
 	window.display();
 }
@@ -398,14 +407,11 @@ void lightDiamond(int xTile, int yTile, int Value)
 
 void tick()
 {
-	// For Future Use
 	ticks++;
 
-	// Set Player Velocity
 	play.xVelo -= (a * play.speed - d * play.speed);
 	play.yVelo -= (w * play.speed - s * play.speed);
 
-	// Change Tiles
 	if (ctrl)
 	{
 		play.destroyTime++;
@@ -415,6 +421,7 @@ void tick()
 
 			int xDir = 0;
 			int yDir = 0;
+			bool placeOk = true;
 
 			switch (play.dir)
 			{
@@ -429,20 +436,26 @@ void tick()
 				break;
 			case 6:
 				xDir = -1;
+				break;
+			default:
+				placeOk = false;
 			}
 
 			int itemid;
-			if (play.invNum == -1) setID(play.x + 3 * xDir, play.y + 3 * yDir, 0);
-			if (play.inv[play.invNum].id == 5)
+			if (placeOk)
 			{
-				if (getID(play.x + 3 * xDir, play.y + 3 * yDir) == 0) 
-					setID(play.x + 3 * xDir, play.y + 3 * yDir, 5);
-			}
-			else
-			{
-				itemid = play.inv[play.invNum].id;
-				if (itemid != 5) for (int x = -1; x < 2; x++) for (int y = -1; y < 2; y++)
-					setID(play.x - x + 3 * xDir, play.y - y + 3 * yDir, itemid);
+				if (play.invNum == -1) setID(play.x + 3 * xDir, play.y + 3 * yDir, 0);
+				if (play.inv[play.invNum].id == 5)
+				{
+					if (getID(play.x + 3 * xDir, play.y + 3 * yDir) == 0)
+						setID(play.x + 3 * xDir, play.y + 3 * yDir, 5);
+				}
+				else
+				{
+					itemid = play.inv[play.invNum].id;
+					if (itemid != 5) for (int x = -1; x < 2; x++) for (int y = -1; y < 2; y++)
+						setID(play.x - x + 3 * xDir, play.y - y + 3 * yDir, itemid);
+				}
 			}
 		}
 	}
@@ -451,7 +464,6 @@ void tick()
 	if (shift && !lightKey) play.light = !play.light;
 	lightKey = shift;
 	
-	// Move Player
 	if (play.xVelo > 0)
 	{
 		for (int x = 0; x < play.xVelo; x++)
@@ -497,13 +509,11 @@ void tick()
 		}
 	}
 
-	// Correct Out-of-Bounds Movement
 	if (play.x <= 0 + 1) play.x = 0 + 1;
 	if (play.x > mWidth - 2) play.x = mWidth - 2;
 	if (play.y - 1 <= 0) play.y = 1;
 	if (play.y + 2 > mHeight) play.y = mHeight - 2;
 
-	// Set Player Direction
 	if (w && !d && !a) play.dir = 0;
 	if (w && d) play.dir = 1;
 	if (d && !w && !s) play.dir = 2;
@@ -513,11 +523,9 @@ void tick()
 	if (a && !w && !s) play.dir = 6;
 	if (a && w) play.dir = 7;
 
-	// Apply Friction
 	play.xVelo = play.xVelo * 0.25;
 	play.yVelo = play.yVelo * 0.25;
 
-	// Reset Map
 	if (r && !regenKey)
 	{
 		play.x = play.xStart;
@@ -525,7 +533,7 @@ void tick()
 		play.xVelo = 0;
 		play.yVelo = 0;
 		play.health = 50;
-		play.dir = -1;
+		play.dir = 0;
 		if (shift)
 		{
 			noiseLvl++;
@@ -534,15 +542,13 @@ void tick()
 	}
 	regenKey = r;
 
-	// Set Lights
-	/*for (int x = 0; x < mWidth; x++)
+	for (int x = 0; x < mWidth; x++)
 	{
 		for (int y = 0; y < mHeight; y++)
 		{
 			setLight(x, y, 0);
 		}
-	}*/
-	resetLight(false);
+	}
 	if (play.light) lightDiamond(play.x, play.y, 15);
 
 	for (int x = play.x - viewDist - 15; x < play.x + viewDist + 15; x++)
@@ -563,6 +569,11 @@ int main()
 	window.setPosition(sf::Vector2i(window.getPosition().x, 0));
 	window.setFramerateLimit(60);
 
+	font.loadFromFile("res/cas.ttf");
+	debug.setFont(font);
+	debug.setPosition(0, 0);
+	debug.setFillColor(sf::Color(255, 255, 255));
+
 	tex[0] = new sf::Texture; tex[0]->loadFromFile("res/air.png");
 	tex[1] = new sf::Texture; tex[1]->loadFromFile("res/stone.png");
 	tex[2] = new sf::Texture; tex[2]->loadFromFile("res/air.png");
@@ -576,7 +587,11 @@ int main()
 	invTileItem.setSize(sf::Vector2f(32, 32));
 
 
-	for (int x = 0; x < mWidth; x++) terrain[x] = new char[mHeight];
+	for (int x = 0; x < mWidth; x++)
+	{
+		terrain[x] = new char[mHeight];
+		lights[x] = new char[mHeight];
+	}
 
 	generate();
 
@@ -605,21 +620,17 @@ int main()
 			}
 		}
 
-		// Get Current Time
 		now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
 		delta += now - last;
 		last = now;
 
-		// Update Catch-Up Loop
 		while (delta >= tps)
 		{
 			delta -= tps;
 			tick();
 		}
 
-		// Gets Keyboard Input
 		key();
-		// Draws Tiles
 		render();
 	}
 
