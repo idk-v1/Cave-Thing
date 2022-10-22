@@ -1,16 +1,15 @@
 #include "SFML/Graphics.hpp"
-#include "Perlin.h"
 #include <chrono>
 #include <thread>
 #include <windows.h>
 #include <iostream>
 #include <sstream>
+#include "SimplexNoise.hpp"
 
 const int
 WIDTH = 960,
 HEIGHT = 720;
 
-enum ID {
 // ID 0000 - Air
 // ID 0001 - Stone
 // ID 0010 - Water
@@ -28,15 +27,6 @@ enum ID {
 // ID 1110 - 
 // ID 1111 - 
 
-	air,
-	stone,
-	water,
-	ore,
-	tree,
-	light,
-	bricks,
-	wood,
-};
 
 int
 tps = 1000 / 20,
@@ -51,9 +41,6 @@ now,
 last,
 delta = 0,
 ticks = 0;
-
-double
-noiseLvl = 0.01;
 
 std::stringstream ss;
 
@@ -109,7 +96,7 @@ public:
 		mineSpeed = 0,
 		speed = 1,
 		health = 50,
-		invNum = 0;
+		invNum = -1;
 
 	Item
 		inv[256];
@@ -118,10 +105,11 @@ public:
 		light = true;
 };
 
+SimplexNoise noise;
 
-Perlin perlin;
-
-Player play;
+Player 
+play,
+def = play;
 
 sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "Cave");
 
@@ -135,7 +123,8 @@ sf::RectangleShape
 tile,
 playTile,
 invTile,
-invTileItem;
+invTileItem,
+minimap;
 
 
 int getLight(int xTile, int yTile)
@@ -243,7 +232,7 @@ void generate()
 			// Bit 7 - Light 8
 
 			// Get Noise from Coordinate
-			if (!std::floor(perlin.noise(x * 0.025, y * 0.025, noiseLvl) + 1.0625))
+			if (!std::floor(noise.signedFBM(x * 0.025, y * 0.025, 2, 1, 0.4) + 1))
 			{
 				setID(x, y, 0);
 			}
@@ -271,8 +260,8 @@ void render()
 		{
 			if (x >= 0 && x < mWidth && y >= 0 && y < mHeight)
 			{
-				light = std::ceil((getLight(x, y) + 1) / 2.0) * 2.0 / 16.0;
-				tile.setFillColor(sf::Color(std::ceil(255 * light), std::ceil(255 * light), std::ceil(255 * light)));
+				light = std::ceil((getLight(x, y)) * 0.4) * 2.5 * (1 / 15.0);
+				tile.setFillColor(sf::Color(std::ceil(255 * light), std::ceil(224 * light), std::ceil(128 * light)));
 				tile.setTexture(tex[getID(x, y)]);
 				tile.setPosition(sf::Vector2f((WIDTH * 0.5 - mWidth * 0.5 * tileSize + (mWidth / 2 - play.x) * tileSize) + (x * tileSize - tileSize * 0.5), (HEIGHT * 0.5 - mHeight * 0.5 * tileSize + (mHeight / 2 - play.y) * tileSize) + (y * tileSize - tileSize * 0.5)));
 				window.draw(tile);
@@ -340,6 +329,25 @@ void render()
 		invTileItem.setPosition(WIDTH / 2 - (i - 4) * 55 - 16, HEIGHT - 75 + 9);
 		window.draw(invTileItem);
 	}
+
+	// UNCOMMENT FOR MINIMAP
+	for (int x = play.x - viewDist * 0.5; x < play.x + viewDist * 0.5; x++)
+	{
+		for (int y = play.y - viewDist * 0.5; y < play.y + viewDist * 0.5; y++)
+		{
+			minimap.setPosition((viewDist * 0.125 + 0.5 - (viewDist * 2 + 1) + ((viewDist + 1) - play.x) * 4) + (x * 4 - 1), (viewDist * 0.125 + 0.5 - (viewDist * 2 + 1) + ((viewDist + 1) - play.y) * 4) + (y * 4 - 1));
+			if (!getID(x, y) || getID(x, y) == 5) minimap.setFillColor(sf::Color(64, 64, 64));
+			else minimap.setFillColor(sf::Color(32, 32, 32));
+			window.draw(minimap);
+		}
+	}
+	minimap.setFillColor(sf::Color(96, 224, 255));
+	for (int x = -1; x < 2; x++)
+		for (int y = -1; y < 2; y++)
+		{
+			minimap.setPosition(viewDist * 2 + 5 + x * 4, viewDist * 2 + 5 + y * 4);
+			window.draw(minimap);
+		}
 
 	ss.str("");
 	ss << "X: " << play.x << " Y: " << play.y;
@@ -528,15 +536,10 @@ void tick()
 
 	if (r && !regenKey)
 	{
-		play.x = play.xStart;
-		play.y = play.yStart;
-		play.xVelo = 0;
-		play.yVelo = 0;
-		play.health = 50;
-		play.dir = 0;
+		play = def;
 		if (shift)
 		{
-			noiseLvl++;
+			noise.randomizeSeed();
 			generate();
 		}
 	}
@@ -571,11 +574,10 @@ int main()
 
 	font.loadFromFile("res/cas.ttf");
 	debug.setFont(font);
-	debug.setPosition(0, 0);
-	debug.setFillColor(sf::Color(255, 255, 255));
+	debug.setPosition(viewDist / 2, (viewDist + 3) * 4);
 
 	tex[0] = new sf::Texture; tex[0]->loadFromFile("res/air.png");
-	tex[1] = new sf::Texture; tex[1]->loadFromFile("res/stone.png");
+	tex[1] = new sf::Texture; tex[1]->loadFromFile("res/stone_l.png");
 	tex[2] = new sf::Texture; tex[2]->loadFromFile("res/air.png");
 	tex[3] = new sf::Texture; tex[3]->loadFromFile("res/air.png");
 	tex[4] = new sf::Texture; tex[4]->loadFromFile("res/air.png");
@@ -585,6 +587,7 @@ int main()
 	tile.setSize(sf::Vector2f(tileSize, tileSize));
 	invTile.setSize(sf::Vector2f(50, 50));
 	invTileItem.setSize(sf::Vector2f(32, 32));
+	minimap.setSize(sf::Vector2f(4, 4));
 
 
 	for (int x = 0; x < mWidth; x++)
@@ -593,7 +596,15 @@ int main()
 		lights[x] = new char[mHeight];
 	}
 
+	int seed = 0;
+	std::cout << "Please enter a seed or leave blank for a random one.\n";
+	std::cin >> seed;
+	if (seed) noise.setSeed((int)seed);
+	else noise.randomizeSeed();
 	generate();
+
+	debug.setFillColor(sf::Color(255, 255, 255));
+	debug.setCharacterSize(15);
 
 	play.inv[0].count = 100;
 	play.inv[0].id = 1;
