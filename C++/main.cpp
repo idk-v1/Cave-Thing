@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sstream>
 #include "SimplexNoise.hpp"
+#include <vector>
 
 const int
 WIDTH = 960,
@@ -30,7 +31,7 @@ HEIGHT = 720;
 
 int
 tps = 1000 / 20,
-tileSize = 16,
+tileSize = 24,
 lightLevel = 16,
 viewDist = 32,
 mWidth = 500,
@@ -41,6 +42,8 @@ now,
 last,
 delta = 0,
 ticks = 0;
+
+double fps;
 
 std::stringstream ss;
 
@@ -59,16 +62,22 @@ char** terrain = new char* [mWidth];
 char** lights = new char* [mWidth];
 
 
-class Vector
+int getID(int xTile, int yTile)
 {
-public:
-	int x;
-	int y;
-	Vector(int xPos, int yPos)
-	{
-		x = xPos;
-		y = yPos;
-	}
+	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
+		return
+		((terrain[xTile][yTile] >> 0) & 1) +
+		((terrain[xTile][yTile] >> 1) & 1) * 2 +
+		((terrain[xTile][yTile] >> 2) & 1) * 4 +
+		((terrain[xTile][yTile] >> 3) & 1) * 8;
+	else return -1;
+}
+
+
+enum entID
+{
+	zombie,
+	chicken
 };
 
 
@@ -107,9 +116,135 @@ public:
 
 SimplexNoise noise;
 
-Player 
+Player
 play,
 def = play;
+
+
+class Entity
+{
+public:
+	int moveRange = 10,
+		health = 25,
+		speed = 1,
+		Velo = 0,
+		yVelo = 0,
+		x = 250,
+		y = 250,
+		dir = 0,
+		width = 0,
+		id = 0;
+	bool done = false;
+
+	sf::Color color;
+	int** path = new int* [moveRange * 2 + 3];
+	int** pathTrace = new int* [moveRange * 2 + 3];
+	bool isAg = false;
+
+	Entity(int id)
+	{
+		for (int x = 0; x < moveRange * 2 + 3; x++)
+		{
+			path[x] = new int[moveRange * 2 + 3];
+			pathTrace[x] = new int[moveRange * 2 + 3];
+		}
+		switch (id)
+		{
+		case zombie:
+			this->id = zombie;
+			this->speed = 2;
+			this->width = tileSize;
+			this->color = sf::Color(255, 128, 0);
+			this->isAg = true;
+			break;
+		}
+	}
+
+	void PathDiamond(int xTile, int yTile, int Value)
+	{
+		if (Value > 0)
+		{
+			if (xTile >= 0 && xTile < (moveRange * 2 + 3) && yTile >= 0 && yTile < (moveRange * 2 + 3))
+			{
+				path[xTile][yTile] = Value;
+				if (path[xTile][yTile - 1] < Value && !getID(this->x + xTile - moveRange - 1, this->y + yTile - moveRange - 1 - 1)) PathDiamond(xTile, yTile - 1, Value - 1);
+				if (path[xTile + 1][yTile] < Value && !getID(this->x + xTile - moveRange - 1 + 1, this->y + yTile - moveRange - 1)) PathDiamond(xTile + 1, yTile, Value - 1);
+				if (path[xTile][yTile + 1] < Value && !getID(this->x + xTile - moveRange - 1, this->y + yTile - moveRange - 1 + 1)) PathDiamond(xTile, yTile + 1, Value - 1);
+				if (path[xTile - 1][yTile] < Value && !getID(this->x + xTile - moveRange - 1 - 1, this->y + yTile - moveRange - 1)) PathDiamond(xTile - 1, yTile, Value - 1);
+			}
+		}
+	}
+
+	void PathTrace(int xTile, int yTile, int Value)
+	{
+		if (Value <= moveRange)
+		{
+			if (xTile >= 0 && xTile < (moveRange * 2 + 3) && yTile >= 0 && yTile < (moveRange * 2 + 3) && !done)
+			{
+				pathTrace[xTile][yTile] = Value;
+				if (!(xTile == moveRange + 1 && yTile == moveRange + 1))
+				{
+					if (play.x > x)
+					{
+						if (path[xTile + 1][yTile] > Value) PathTrace(xTile + 1, yTile, Value + 1);
+						if (path[xTile][yTile - 1] > Value) PathTrace(xTile, yTile - 1, Value + 1);
+						if (path[xTile][yTile + 1] > Value) PathTrace(xTile, yTile + 1, Value + 1);
+						if (path[xTile - 1][yTile] > Value) PathTrace(xTile - 1, yTile, Value + 1);
+					}
+					else if (play.x < x)
+					{
+						if (path[xTile - 1][yTile] > Value) PathTrace(xTile - 1, yTile, Value + 1);
+						if (path[xTile][yTile - 1] > Value) PathTrace(xTile, yTile - 1, Value + 1);
+						if (path[xTile + 1][yTile] > Value) PathTrace(xTile + 1, yTile, Value + 1);
+						if (path[xTile][yTile + 1] > Value) PathTrace(xTile, yTile + 1, Value + 1);
+					}
+					else if (play.y > y)
+					{
+						if (path[xTile][yTile + 1] > Value) PathTrace(xTile, yTile + 1, Value + 1);
+						if (path[xTile][yTile - 1] > Value) PathTrace(xTile, yTile - 1, Value + 1);
+						if (path[xTile + 1][yTile] > Value) PathTrace(xTile + 1, yTile, Value + 1);
+						if (path[xTile - 1][yTile] > Value) PathTrace(xTile - 1, yTile, Value + 1);
+					}
+					else
+					{
+						if (path[xTile][yTile - 1] > Value) PathTrace(xTile, yTile - 1, Value + 1);
+						if (path[xTile + 1][yTile] > Value) PathTrace(xTile + 1, yTile, Value + 1);
+						if (path[xTile][yTile + 1] > Value) PathTrace(xTile, yTile + 1, Value + 1);
+						if (path[xTile - 1][yTile] > Value) PathTrace(xTile - 1, yTile, Value + 1);
+					}
+				}
+				else done = true;
+				/*
+					for movement compare all sides for largest then move
+					otherwise it will go backwards
+				*/
+			}
+		}
+	}
+
+	void Pathfind()
+	{
+		for (int x = 0; x < moveRange * 2 + 3; x++)
+		{
+			for (int y = 0; y < moveRange * 2 + 3; y++)
+			{
+				path[x][y] = 0;
+				pathTrace[x][y] = 0;
+			}
+		}
+		if (isAg)
+		{
+			done = false;
+			PathDiamond(this->moveRange + 1, this->moveRange + 1, this->moveRange);
+			if ((abs(play.x - this->x) + abs(play.y - this->y)) < moveRange)
+				PathTrace(moveRange + 1 + (play.x - this->x), moveRange + 1 + (play.y - this->y), 0);
+
+		}
+	}
+};
+
+std::vector<Entity> ent;
+
 
 sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "Cave");
 
@@ -135,18 +270,6 @@ int getLight(int xTile, int yTile)
 		((lights[xTile][yTile] >> 1) & 1) * 2 +
 		((lights[xTile][yTile] >> 2) & 1) * 4 +
 		((lights[xTile][yTile] >> 3) & 1) * 8;
-	else return -1;
-}
-
-
-int getID(int xTile, int yTile)
-{
-	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
-		return
-		((terrain[xTile][yTile] >> 0) & 1) +
-		((terrain[xTile][yTile] >> 1) & 1) * 2 +
-		((terrain[xTile][yTile] >> 2) & 1) * 4 +
-		((terrain[xTile][yTile] >> 3) & 1) * 8;
 	else return -1;
 }
 
@@ -222,24 +345,8 @@ void generate()
 	{
 		for (int y = 0; y < mHeight; y++)
 		{
-			// Bit 0 - ID 1
-			// Bit 1 - ID 2
-			// Bit 2 - ID 4
-			// Bit 3 - ID 8
-			// Bit 4 - Light 1
-			// Bit 5 - Light 2
-			// Bit 6 - Light 4
-			// Bit 7 - Light 8
-
-			// Get Noise from Coordinate
-			if (!std::floor(noise.signedFBM(x * 0.025, y * 0.025, 2, 1, 0.4) + 1))
-			{
-				setID(x, y, 0);
-			}
-			else 
-			{
-				setID(x, y, 1);
-			}
+			if (!std::floor(noise.signedFBM(x * 0.025, y * 0.025, 2, 1, 0.4) + 1)) setID(x, y, 0);
+			else setID(x, y, 1);
 		}
 	}
 	resetLight(true);
@@ -254,6 +361,7 @@ void render()
 	double light;
 	window.clear();
 
+	// Draws Tiles Start
 	for (int x = play.x - viewDist; x < play.x + viewDist; x++)
 	{
 		for (int y = play.y - viewDist; y < play.y + viewDist; y++)
@@ -268,7 +376,39 @@ void render()
 			}
 		}
 	}
+	// Draws Tiles End
 
+	// Draws Entities Start
+	for (int x = 0; x < ent[0].moveRange * 2 + 3; x++)
+	{
+		for (int y = 0; y < ent[0].moveRange * 2 + 3; y++)
+		{
+			if (ent[0].pathTrace[x][y])
+			{
+				tile.setTexture(tex[0]);
+				tile.setPosition(sf::Vector2f((WIDTH * 0.5 - mWidth * 0.5 * tileSize + (mWidth / 2 - play.x) * tileSize) + ((x + ent[0].x - ent[0].moveRange / 2 + 1 - 7) * tileSize - tileSize * 0.5), (HEIGHT * 0.5 - mHeight * 0.5 * tileSize + (mHeight / 2 - play.y) * tileSize) + ((y + ent[0].y - ent[0].moveRange / 2 + 1 - 7) * tileSize - tileSize * 0.5)));
+				if (ent[0].pathTrace[x][y]) tile.setFillColor(sf::Color(0, 255 * (ent[0].pathTrace[x][y] * 0.1), 0));
+				window.draw(tile);
+			}
+		}
+	}
+
+	for (int i = 0; i < ent.size(); i++)
+	{
+		if (ent[i].x > play.x - viewDist && ent[i].x < play.x + viewDist && ent[i].y > play.y - viewDist && ent[i].y < play.y + viewDist)
+		{
+			tile.setTexture(tex[0]);
+			for (int x = -std::floor(ent[i].width / 2); x < std::floor(ent[i].width / 2); x++)
+				for (int y = -std::floor(ent[i].width / 2); y < std::floor(ent[i].width / 2); y++)
+					tile.setPosition(sf::Vector2f((WIDTH * 0.5 - mWidth * 0.5 * tileSize + (mWidth / 2 - play.x) * tileSize) + ((ent[i].x + x - (tileSize / 2 - 1)) * tileSize - tileSize * 0.5), (HEIGHT * 0.5 - mHeight * 0.5 * tileSize + (mHeight / 2 - play.y) * tileSize) + ((ent[i].y + y - (tileSize / 2 - 1)) * tileSize - tileSize * 0.5)));
+			tile.setFillColor(ent[i].color);
+			window.draw(tile);
+		}
+	}
+
+	// Draws Entities End
+
+	// Draws Player Start
 	light = std::ceil((getLight(play.x, play.y) + 1) / 2.0) * 2.0 / 16.0;
 	playTile.setFillColor(sf::Color(64 * light, 192 * light, 224 * light));
 	playTile.setPosition(int(WIDTH / 2 - play.width / 2), int(HEIGHT / 2 - play.width / 2));
@@ -317,7 +457,9 @@ void render()
 		playTile.setFillColor(sf::Color(255, 0, 0, 128 * play.destroyTime * 0.1));
 		window.draw(playTile);
 	}
+	// Draws Player End
 
+	// Draws Inventory Start
 	for (int i = 0; i < 9; i++)
 	{
 		if (play.invNum == 8 - i) invTile.setFillColor(sf::Color(96, 96, 96));
@@ -329,9 +471,10 @@ void render()
 		invTileItem.setPosition(WIDTH / 2 - (i - 4) * 55 - 16, HEIGHT - 75 + 9);
 		window.draw(invTileItem);
 	}
+	// Draws Inventory End
 
 	// UNCOMMENT FOR MINIMAP
-	for (int x = play.x - viewDist * 0.5; x < play.x + viewDist * 0.5; x++)
+	/*for (int x = play.x - viewDist * 0.5; x < play.x + viewDist * 0.5; x++)
 	{
 		for (int y = play.y - viewDist * 0.5; y < play.y + viewDist * 0.5; y++)
 		{
@@ -347,10 +490,11 @@ void render()
 		{
 			minimap.setPosition(viewDist * 2 + 5 + x * 4, viewDist * 2 + 5 + y * 4);
 			window.draw(minimap);
-		}
+		}*/
+	// END UNCOMMENT
 
 	ss.str("");
-	ss << "X: " << play.x << " Y: " << play.y;
+	ss << "X: " << play.x << " Y: " << play.y << " FPS: " << fps;
 	debug.setString(ss.str());
 	window.draw(debug);
 
@@ -416,6 +560,11 @@ void lightDiamond(int xTile, int yTile, int Value)
 void tick()
 {
 	ticks++;
+
+	if (ticks % 2 == 0)
+	{
+		ent[0].Pathfind();
+	}
 
 	play.xVelo -= (a * play.speed - d * play.speed);
 	play.yVelo -= (w * play.speed - s * play.speed);
@@ -610,12 +759,8 @@ int main()
 	play.inv[0].id = 1;
 	play.inv[1].count = 100;
 	play.inv[1].id = 5;
-	play.inv[2].count = 100;
-	play.inv[2].id = 0;
-	play.inv[3].count = 100;
-	play.inv[3].id = 0;
-	play.inv[4].count = 100;
-	play.inv[4].id = 0;
+
+	ent.push_back(Entity(zombie));
 
 	now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
 	last = now;
@@ -633,6 +778,7 @@ int main()
 
 		now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
 		delta += now - last;
+		if (ticks % 5 == 0) fps = 1000.0 / ((now - last));
 		last = now;
 
 		while (delta >= tps)
