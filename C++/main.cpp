@@ -14,6 +14,9 @@ If you are reading this, good luck. This code follows the rule of "if it works, 
 #include <vector>
 #include <functional>
 #include <string>
+#include <fstream>
+#include <iomanip>
+
 
 int
 WIDTH = 960,
@@ -49,7 +52,9 @@ tileSize = 32,
 lightLevel = 16,
 viewDist = 32,
 mWidth = 500,
-mHeight = 500;
+mHeight = 500,
+
+pageNum = 0;
 
 long
 now,
@@ -62,7 +67,6 @@ long long seed = 0;
 double fps;
 
 std::stringstream ss;
-std::string seedstr;
 
 bool
 w = false,
@@ -71,17 +75,19 @@ s = false,
 d = false,
 r = false,
 click = false,
+clickL = false,
 ctrl = false,
 shift = false,
 caps = false,
+esc = false,
+escL = false,
 regenKey = false,
 lightKey = false,
 
-mm = true,
 inGame = false,
 gen = false;
 
-char** terrain = new char* [mWidth];
+char** terrain; // = new char* [mWidth];
 char** lights = new char* [mWidth];
 
 
@@ -118,10 +124,10 @@ public:
 	int
 		xVelo = 0,
 		yVelo = 0,
-		x = int(mWidth / 2),
-		y = int(mHeight / 2),
-		xStart = int(mWidth / 2),
-		yStart = int(mHeight / 2),
+		x = 1,
+		y = 1,
+		xStart = 1,
+		yStart = 1,
 		dir = 0,
 		width = tileSize * 3,
 		destroyTime = 0,
@@ -146,15 +152,78 @@ public:
 
 	Button(int x, int y, int w, int h, std::string str)
 	{
-		this->x = x;
-		this->y = y;
-		this->w = w;
-		this->h = h;
+		this->x = x * 15;
+		this->y = y * 15;
+		this->w = w * 15;
+		this->h = h * 15;
 		this->str = str;
 	}
 };
 
-Button* buttons[2];
+class Label
+{
+public:
+	int x = 0, y = 0, w = 0, h = 0;
+	std::string str = "";
+
+	Label(int x, int y, int w, int h, std::string str)
+	{
+		this->x = x * 15;
+		this->y = y * 15;
+		this->w = w * 15;
+		this->h = h * 15;
+		this->str = str;
+	}
+};
+
+class Textbox
+{
+public:
+	int x = 0, y = 0, w = 0, h = 0;
+	bool sel = false;
+	std::string str = "";
+
+	Textbox(int x, int y, int w, int h)
+	{
+		this->x = x * 15;
+		this->y = y * 15;
+		this->w = w * 15;
+		this->h = h * 15;
+	}
+};
+
+class Title
+{
+public:
+	int x = 0, y = 0, w = 0, h = 0;
+	std::string str = "";
+
+	Title(int x, int y, int w, int h, std::string str)
+	{
+		this->x = x * 15;
+		this->y = y * 15;
+		this->w = w * 15;
+		this->h = h * 15;
+		this->str = str;
+	}
+};
+
+class Page
+{
+public:
+	std::vector<Textbox*> tbx;
+	int tbxNum = 0;
+	std::vector<Button*> btn;
+	int btnNum = 0;
+	std::vector<Label*> lbl;
+	int lblNum = 0;
+	std::vector<Title*> ttl;
+	int ttlNum = 0;
+	int selID = -1;
+};
+
+Page* pages[3];
+
 
 SimplexNoise noise;
 
@@ -451,30 +520,68 @@ void setID(int xTile, int yTile, int Value)
 }
 
 
+void save()
+{
+	std::cout << "Saving... ";
+	LPCWSTR worlds = L"worlds";
+	if (CreateDirectory(worlds, NULL) || ERROR_ALREADY_EXISTS == GetLastError())
+	{
+		LPCWSTR world1 = L"worlds/world1";
+		if (CreateDirectory(world1, NULL) || ERROR_ALREADY_EXISTS == GetLastError())
+		{
+			std::ofstream file("worlds/world1/trn.txt", std::ios::binary | std::ios::out);
+			if (file.is_open())
+			{
+				for (int x = 0; x < mWidth; x++)
+				{
+					for (int y = 0; y < mHeight; y++)
+					{
+						file << std::setw(3) << std::setfill('0') << getID(x, y);
+					}
+				}
+				file.close();
+				std::cout << "Done!";
+			}
+			else std::cout << "Error!";
+		}
+		else std::cout << "Error!";
+	}
+	else std::cout << "Error!";
+}
+
+
 void generate()
 {
+	if (pages[1]->tbx[2]->str.length() > 0)
+	{
+		int width = std::stoi(pages[1]->tbx[2]->str) * 2;
+		if (width > 4 && width < 32768) 
+			mWidth = width;
+	}
+	if (pages[1]->tbx[3]->str.length() > 0)
+	{
+		int height = std::stoi(pages[1]->tbx[3]->str) * 2;
+		if (height > 4 && height < 32768) 
+			mHeight = height;
+	}
+	terrain = new char*[mWidth];
 	for (int x = 0; x < mWidth; x++)
 	{
 		terrain[x] = new char[mHeight];
 		lights[x] = new char[mHeight];
 	}
 
-	if (seedstr.length() > 4)
+	int r = std::hash<time_t>{}(time(nullptr));
+	noise.setSeed(r);
+	seed = r;
+	if (pages[1]->tbx[1]->str.length() > 4 && pages[1]->tbx[1]->str.length() < 11)
 	{
 		bool isnum = true;
-		for (int i = 0; i < seedstr.length(); i++)
-			if (!isdigit(seedstr[i])) isnum = false;
-		if (!isnum)
-			seed = std::hash<std::string>{}(seedstr);
-		else seed = std::stol(seedstr);
+		for (int i = 0; i < pages[1]->tbx[1]->str.length(); i++)
+			if (!isdigit(pages[1]->tbx[1]->str[i])) isnum = false;
+		if (isnum)
+			seed = std::stol(pages[1]->tbx[1]->str);
 		noise.setSeed(seed);
-	}
-	else
-	{
-		int r = std::hash<time_t>{}(time(nullptr));
-		noise.setSeed(r);
-		//std::cout << r << "\n";
-		seed = r;
 	}
 
 	for (int x = 0; x < mWidth; x++)
@@ -490,6 +597,7 @@ void generate()
 		for (int y = -1; y < 2; y++)
 			setID(play.x - x, play.y - y, air);
 	gen = true;
+	save();
 }
 
 
@@ -640,7 +748,7 @@ void render()
 		// END UNCOMMENT
 
 	ss.str("");
-	ss << "X: " << play.x << " Y: " << play.y << " Seed: " << seed;
+	ss << "X: " << play.x << " Y: " << play.y << " Seed: " << seed << " Map W: " << mWidth << " Map H: " << mHeight;
 	debug.setString(ss.str());
 	window.draw(debug);
 
@@ -691,10 +799,13 @@ void key()
 		if (GetAsyncKeyState(0x52) == 0) r = false;
 	}
 
+	clickL = click;
 	if (GetAsyncKeyState(0x01) < 0) click = true;
 	if (GetAsyncKeyState(0x01) == 0) click = false;
 
-	if (GetAsyncKeyState(0x1B) < 0) window.close();
+	escL = esc;
+	if (GetAsyncKeyState(0x1B) < 0) esc = true;
+	if (GetAsyncKeyState(0x1B) == 0) esc = false;
 
 	GetCursorPos(&mPos);
 	ScreenToClient(window.getSystemHandle(), &mPos);
@@ -719,12 +830,10 @@ void lightDiamond(int xTile, int yTile, int Value)
 
 void tick()
 {
-	ticks++;
-
-	if (ticks % 3 == 0)
-	{
-		ent[0].Pathfind();
-	}
+	//if (ticks % 3 == 0)
+	//{
+	//	ent[0].Pathfind();
+	//}
 
 	play.xVelo -= (a * play.speed - d * play.speed);
 	play.yVelo -= (w * play.speed - s * play.speed);
@@ -909,45 +1018,128 @@ void rMenu()
 	frame.setFillColor(sf::Color(20, 40, 80));
 	window.draw(frame);
 
-	if (mm)
+	int i = pageNum;
+	// Buttons
+	for (int e = 0; e < pages[i]->btnNum; e++)
 	{
-		for (int i = 0; i < 2; i++)
-		{
-			button.setPosition(buttons[i]->x, buttons[i]->y);
-			button.setSize(sf::Vector2f(buttons[i]->w, buttons[i]->h));
-			btnTxt.setPosition(buttons[i]->x + 0.5 * buttons[i]->w - 9 * buttons[i]->str.length(), buttons[i]->y + 0.5 * buttons[i]->h - 20);
-			btnTxt.setString(buttons[i]->str);
+		button.setPosition(pages[i]->btn[e]->x, pages[i]->btn[e]->y);
+		button.setSize(sf::Vector2f(pages[i]->btn[e]->w, pages[i]->btn[e]->h));
 
-			if (mPos.x >= buttons[i]->x && mPos.x < buttons[i]->x + buttons[i]->w &&
-				mPos.y >= buttons[i]->y && mPos.y < buttons[i]->y + buttons[i]->h)
+		btnTxt.setCharacterSize(30);
+		btnTxt.setPosition(pages[i]->btn[e]->x + 0.5 * pages[i]->btn[e]->w - 9 * pages[i]->btn[e]->str.length(), pages[i]->btn[e]->y + 0.5 * pages[i]->btn[e]->h - 20);
+		btnTxt.setString(pages[i]->btn[e]->str);
+
+		if (mPos.x >= pages[i]->btn[e]->x && mPos.x < pages[i]->btn[e]->x + pages[i]->btn[e]->w &&
+			mPos.y >= pages[i]->btn[e]->y && mPos.y < pages[i]->btn[e]->y + pages[i]->btn[e]->h)
+		{
+			button.setFillColor(sf::Color(96, 96, 96));
+			if (!click && clickL)
 			{
-				button.setFillColor(sf::Color(96, 96, 96));
-				if (click)
+				switch (pageNum)
 				{
-					switch (i)
+				case 0: // Main Menu ***********************
+					switch (e)
 					{
-					case 0:
-						mm = false;
+					case 0: // Play
+						pageNum = 1;
 						break;
-					case 1:
+					case 1: // Quit
 						window.close();
 						break;
+					case 2: // Settings
+						pageNum = 2;
+						break;
 					}
+					break; // *********************************
+				case 1: // Create World ***********************
+					switch (e)
+					{
+					case 0: // Back
+						pageNum = 0;
+						for (int e = 0; e < pages[i]->tbxNum; e++)
+						{
+							pages[i]->tbx[e]->str = "";
+						}
+						pages[i]->selID = -1;
+						break;
+					case 1: // Create
+						inGame = true;
+						generate();
+						break;
+					}
+					break; // *********************************
+				case 2: // Settings ***************************
+					switch (e)
+					{
+					case 0: // Back
+						pageNum = 0;
+						for (int e = 0; e < pages[i]->tbxNum; e++)
+						{
+							pages[i]->tbx[e]->str = "";
+						}
+						pages[i]->selID = -1;
+						break;
+					}
+					break; // *********************************
 				}
 			}
-			else button.setFillColor(sf::Color(64, 64, 64));
-			window.draw(button);
-			window.draw(btnTxt);
 		}
+		else
+			button.setFillColor(sf::Color(64, 64, 64));
+
+		window.draw(button);
+		window.draw(btnTxt);
 	}
 
-	if (!mm && !inGame)
+	// Titles
+	for (int e = 0; e < pages[i]->ttlNum; e++)
 	{
-		worldOpt1.setFillColor(sf::Color(64, 64, 64));
-		window.draw(worldOpt1);
+		double charSz = 85 + 15.0 * std::sin(ticks / 4.0);
+		btnTxt.setCharacterSize(charSz);
+		btnTxt.setPosition(pages[i]->ttl[e]->x + 0.5 * pages[i]->ttl[e]->w - (charSz * 0.3) * pages[i]->ttl[e]->str.length(), pages[i]->ttl[e]->y + 0.5 * pages[i]->ttl[e]->h - (charSz * 0.667));
+		btnTxt.setString(pages[i]->ttl[e]->str);
 
-		worldText1.setString(ss.str());
-		window.draw(worldText1);
+		window.draw(btnTxt);
+	}
+
+	// Labels
+	for (int e = 0; e < pages[i]->lblNum; e++)
+	{
+		button.setPosition(pages[i]->lbl[e]->x, pages[i]->lbl[e]->y);
+		button.setSize(sf::Vector2f(pages[i]->lbl[e]->w, pages[i]->lbl[e]->h));
+		button.setFillColor(sf::Color(64, 64, 64));
+
+		btnTxt.setCharacterSize(30);
+		btnTxt.setPosition(pages[i]->lbl[e]->x + 0.5 * pages[i]->lbl[e]->w - 9 * pages[i]->lbl[e]->str.length(), pages[i]->lbl[e]->y + 0.5 * pages[i]->lbl[e]->h - 20);
+		btnTxt.setString(pages[i]->lbl[e]->str);
+
+		window.draw(button);
+		window.draw(btnTxt);
+	}
+
+	// Textboxes
+	for (int e = 0; e < pages[i]->tbxNum; e++)
+	{
+		button.setPosition(pages[i]->tbx[e]->x, pages[i]->tbx[e]->y);
+		button.setSize(sf::Vector2f(pages[i]->tbx[e]->w, pages[i]->tbx[e]->h));
+
+		btnTxt.setCharacterSize(30);
+		btnTxt.setPosition(pages[i]->tbx[e]->x + 0.5 * pages[i]->tbx[e]->w - 9 * pages[i]->tbx[e]->str.length(), pages[i]->tbx[e]->y + 0.5 * pages[i]->tbx[e]->h - 20);
+		btnTxt.setString(pages[i]->tbx[e]->str);
+
+		if ((mPos.x >= pages[i]->tbx[e]->x && mPos.x < pages[i]->tbx[e]->x + pages[i]->tbx[e]->w &&
+			mPos.y >= pages[i]->tbx[e]->y && mPos.y < pages[i]->tbx[e]->y + pages[i]->tbx[e]->h) || pages[i]->selID == e)
+		{
+			button.setFillColor(sf::Color(96, 96, 96));
+			if (!click && clickL)
+			{
+				pages[i]->selID = e;
+			}
+		}
+		else button.setFillColor(sf::Color(64, 64, 64));
+
+		window.draw(button);
+		window.draw(btnTxt);
 	}
 
 	window.display();
@@ -962,8 +1154,7 @@ int main()
 	font.loadFromFile("res/cas.ttf");
 	debug.setFont(font);
 	debug.setPosition(viewDist / 2, (viewDist + 3) * 4);
-	worldText1.setFont(font);
-	worldText1.setPosition(WIDTH * 0.25, WIDTH / 2 - WIDTH / 24);
+
 	itemNum.setCharacterSize(10);
 	itemNum.setFont(font);
 
@@ -1011,19 +1202,51 @@ int main()
 	minimap.setSize(sf::Vector2f(4, 4));
 	frame.setSize(sf::Vector2f(WIDTH, HEIGHT));
 	frame.setPosition(0, 0);
-	worldOpt1.setSize(sf::Vector2f(WIDTH / 2, WIDTH / 12));
-	worldOpt1.setPosition(WIDTH * 0.25, WIDTH / 2 - WIDTH / 24);
 
-	buttons[0] = new Button(WIDTH / 2 - WIDTH / 6, WIDTH / 2 - WIDTH / 12, WIDTH / 3, WIDTH / 9, "PLAY");
-	buttons[1] = new Button(WIDTH / 2 - WIDTH / 6, WIDTH / 2 + WIDTH / 24, WIDTH / 3, WIDTH / 9, "QUIT");
 	btnTxt.setFillColor(sf::Color(255, 255, 255));
-	btnTxt.setCharacterSize(30);
 	btnTxt.setFont(font);
+
+
+	pages[0] = new Page;
+
+	pages[0]->btn.push_back(new Button(18, 22, 28, 9, "PLAY"));
+	pages[0]->btn.push_back(new Button(18, 33, 13, 9, "QUIT"));
+	pages[0]->btn.push_back(new Button(33, 33, 13, 9, "SETTINGS"));
+	pages[0]->btnNum = 3;
+
+	pages[0]->ttl.push_back(new Title(0, 6, 64, 8, "CAVE TEST"));
+	pages[0]->ttlNum = 1;
+
+
+	pages[1] = new Page;
+
+	pages[1]->btn.push_back(new Button(1, 41, 7, 5, "BACK"));
+	pages[1]->btn.push_back(new Button(43, 18, 8, 5, "CREATE"));
+	pages[1]->btnNum = 2;
+
+	pages[1]->lbl.push_back(new Label(10, 11, 13, 5, "WORLD NAME"));
+	pages[1]->lbl.push_back(new Label(10, 18, 13, 5, "WORLD SEED"));
+	pages[1]->lbl.push_back(new Label(10, 25, 15, 5, "MAP RADIUS X"));
+	pages[1]->lbl.push_back(new Label(10, 32, 15, 5, "MAP RADIUS Y"));
+	pages[1]->lblNum = 4;
+
+	pages[1]->tbx.push_back(new Textbox(25, 11, 26, 5));
+	pages[1]->tbx.push_back(new Textbox(25, 18, 16, 5));
+	pages[1]->tbx.push_back(new Textbox(27, 25, 10, 5));
+	pages[1]->tbx.push_back(new Textbox(27, 32, 10, 5));
+	pages[1]->tbxNum = 4;
+
+
+	pages[2] = new Page;
+
+	pages[2]->btn.push_back(new Button(1, 41, 7, 5, "BACK"));
+	pages[2]->btnNum = 1;
+
 
 	debug.setFillColor(sf::Color(255, 255, 255));
 	debug.setCharacterSize(15);
 
-	ent.push_back(Entity(zombie));
+	//ent.push_back(Entity(zombie));
 
 	now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
 	last = now;
@@ -1040,23 +1263,21 @@ int main()
 
 			if (event.type == sf::Event::TextEntered)
 			{
-				if (!inGame && !mm)
+				if (!inGame)
 				{
-					char num = static_cast<char>(event.text.unicode);
-					if (num == '\b')
+					char c = static_cast<char>(event.text.unicode);
+					if (pages[pageNum]->selID != -1)
 					{
-						if (seedstr.length() > 0) seedstr.pop_back();
+						if (c == '\b' && pages[pageNum]->tbx[pages[pageNum]->selID]->str.length() > 0)
+							pages[pageNum]->tbx[pages[pageNum]->selID]->str.pop_back();
+						else if (c == '\r')
+							pages[pageNum]->selID = -1;
+						else if (isprint(c))
+						{
+							std::cout << c << "\n";
+							pages[pageNum]->tbx[pages[pageNum]->selID]->str.push_back(c);
+						}
 					}
-					else if (num == '\r')
-					{
-						inGame = true;
-						generate();
-					}
-					else
-					{
-						if (seedstr.length() < 9) seedstr.push_back(static_cast<char>(event.text.unicode));
-					}
-					ss.str(seedstr);
 				}
 			}
 		}
@@ -1069,12 +1290,13 @@ int main()
 		while (delta >= tps)
 		{
 			delta -= tps;
+			ticks++;
 			if (gen) tick();
 		}
 
 		key();
 
-		if (gen) render();
+		if (inGame) render();
 		else rMenu();
 	}
 
