@@ -462,7 +462,7 @@ bool isSolid(int x, int y)
 	case ore4:
 		return true;
 		break;
-	default: 
+	default:
 		return false;
 	}
 }
@@ -555,16 +555,16 @@ void generate()
 	if (pages[1]->tbx[2]->str.length() > 0)
 	{
 		int width = std::stoi(pages[1]->tbx[2]->str) * 2;
-		if (width > 4 && width < 32768) 
+		if (width > 4 && width < 32768)
 			mWidth = width;
 	}
 	if (pages[1]->tbx[3]->str.length() > 0)
 	{
 		int height = std::stoi(pages[1]->tbx[3]->str) * 2;
-		if (height > 4 && height < 32768) 
+		if (height > 4 && height < 32768)
 			mHeight = height;
 	}
-	terrain = new char*[mWidth];
+	terrain = new char* [mWidth];
 	for (int x = 0; x < mWidth; x++)
 	{
 		terrain[x] = new char[mHeight];
@@ -662,48 +662,33 @@ void render()
 	playTile.setPosition(int(WIDTH / 2 - play.width / 2), int(HEIGHT / 2 - play.width / 2));
 	window.draw(playTile);
 
-	switch (play.dir)
-	{
-	case 0:
-		tile.setPosition(int(WIDTH / 2 - tileSize / 2), int(HEIGHT / 2 - tileSize / 2 - tileSize));
-		playTile.setPosition(sf::Vector2f(WIDTH / 2 - tileSize / 2 - tileSize, HEIGHT / 2 - tileSize / 2 - play.width - tileSize));
-		break;
-	case 1:
-		tile.setPosition(int(WIDTH / 2 - tileSize / 2 + tileSize), int(HEIGHT / 2 - tileSize / 2 - tileSize));
-		break;
-	case 2:
-		tile.setPosition(int(WIDTH / 2 - tileSize / 2 + tileSize), int(HEIGHT / 2 - tileSize / 2));
-		playTile.setPosition(sf::Vector2f(WIDTH / 2 - tileSize / 2 + play.width - tileSize, HEIGHT / 2 - tileSize / 2 - tileSize));
-		break;
-	case 3:
-		tile.setPosition(int(WIDTH / 2 - tileSize / 2 + tileSize), int(HEIGHT / 2 - tileSize / 2 + tileSize));
-		break;
-	case 4:
-		tile.setPosition(int(WIDTH / 2 - tileSize / 2), int(HEIGHT / 2 - tileSize / 2 + tileSize));
-		playTile.setPosition(sf::Vector2f(WIDTH / 2 - tileSize / 2 - tileSize, HEIGHT / 2 - tileSize / 2 + play.width - tileSize));
-		break;
-	case 5:
-		tile.setPosition(int(WIDTH / 2 - tileSize / 2 - tileSize), int(HEIGHT / 2 - tileSize / 2 + tileSize));
-		break;
-	case 6:
-		tile.setPosition(int(WIDTH / 2 - tileSize / 2 - tileSize), int(HEIGHT / 2 - tileSize / 2));
-		playTile.setPosition(sf::Vector2f(WIDTH / 2 - tileSize / 2 - play.width - tileSize, HEIGHT / 2 - tileSize / 2 - tileSize));
-		break;
-	case 7:
-		tile.setPosition(int(WIDTH / 2 - tileSize / 2 - tileSize), int(HEIGHT / 2 - tileSize / 2 - tileSize));
-		break;
-	default:
-		tile.setPosition(int(WIDTH / 2 - tileSize / 2), int(HEIGHT / 2 - tileSize / 2));
-	}
+	int xOff = 0;
+	int yOff = 0;
+	int pd = play.dir;
+	if (pd == 7 || pd == 0 || pd == 1) yOff--;
+	if (pd == 1 || pd == 2 || pd == 3) xOff++;
+	if (pd == 3 || pd == 4 || pd == 5) yOff++;
+	if (pd == 5 || pd == 6 || pd == 7) xOff--;
 
+	tile.setPosition(WIDTH / 2 - tileSize / 2 + tileSize * xOff, HEIGHT / 2 - tileSize / 2 + tileSize * yOff);
 	tile.setFillColor(sf::Color(96, 224, 255));
 	tile.setTexture(tex[0]);
 	window.draw(tile);
 
 	if (play.dir == 0 || play.dir == 2 || play.dir == 4 || play.dir == 6)
 	{
-		playTile.setFillColor(sf::Color(255, 0, 0, 128 * play.destroyTime * 0.1));
-		window.draw(playTile);
+		if (caps)
+		{
+			playTile.setPosition(WIDTH / 2 - tileSize / 2 + play.width * xOff - tileSize, HEIGHT / 2 - tileSize / 2 + play.width * yOff - tileSize);
+			playTile.setFillColor(sf::Color(255, 0, 0, 128 * play.destroyTime * 0.1));
+			window.draw(playTile);
+		}
+		else
+		{
+			tile.setPosition(WIDTH / 2 - tileSize / 2 + 2 * tileSize * xOff, HEIGHT / 2 - tileSize / 2 + 2 * tileSize * yOff);
+			tile.setFillColor(sf::Color(255, 0, 0, 128 * play.destroyTime * 0.1));
+			window.draw(tile);
+		}
 	}
 	// Draws Player End
 
@@ -748,7 +733,7 @@ void render()
 		// END UNCOMMENT
 
 	ss.str("");
-	ss << "X: " << play.x << " Y: " << play.y << " Seed: " << seed << " Map W: " << mWidth << " Map H: " << mHeight;
+	ss << "X: " << play.x << "\nY: " << play.y << "\nSeed: " << seed << "\nMap W: " << mWidth << "\nMap H: " << mHeight << "\nBuild Mode: " << caps * 2 + 1 << "x" << caps * 2 + 1;
 	debug.setString(ss.str());
 	window.draw(debug);
 
@@ -880,17 +865,89 @@ void tick()
 				int itemNum = play.invNum;
 				if (play.invNum == -1) itemNum = 255;
 
-				if (play.inv[itemNum].id == light)
+				if (!caps)
 				{
-					if (play.inv[itemNum].count > 0)
+					if (play.inv[itemNum].count > 0 || play.inv[itemNum].id == air)
 					{
-						if (isRemovable(play.x + 3 * xDir, play.y + 3 * yDir))
+						if (isRemovable(play.x + 2 * xDir, play.y + 2 * yDir))
 						{
-							setID(play.x + 3 * xDir, play.y + 3 * yDir, 5);
-							play.inv[itemNum].count--;
+							setID(play.x + 2 * xDir, play.y + 2 * yDir, play.inv[itemNum].id);
+							if (play.inv[itemNum].id != air)
+							{
+								play.inv[itemNum].count--;
+							}
+						}
+						else if (isBreakable(play.x + 2 * xDir, play.y + 2 * yDir) && play.inv[itemNum].id == air)
+						{
+							int searchID = getID(play.x + 2 * xDir, play.y + 2 * yDir);
+							setID(play.x + 2 * xDir, play.y + 2 * yDir, air);
+
+							bool foundItem = false;
+							for (int i = 0; i < 256; i++)
+							{
+								if (play.inv[i].id == searchID && play.inv[i].count < 450 && !foundItem)
+								{
+									play.inv[i].count++;
+									foundItem = true;
+								}
+							}
+							for (int i = 0; i < 256; i++)
+							{
+								if (play.inv[i].id == air && !foundItem)
+								{
+									play.inv[i].id = searchID;
+									play.inv[i].count++;
+									foundItem = true;
+								}
+							}
 						}
 					}
 				}
+				else
+				{
+					if (play.inv[itemNum].count > 8 || play.inv[itemNum].id == air)
+					{
+						for (int x = -1; x < 2; x++)
+						{
+							for (int y = -1; y < 2; y++)
+							{
+								if (isRemovable(play.x - x + 3 * xDir, play.y - y + 3 * yDir))
+								{
+									setID(play.x - x + 3 * xDir, play.y - y + 3 * yDir, play.inv[itemNum].id);
+									if (play.inv[itemNum].id != air)
+									{
+										play.inv[itemNum].count--;
+									}
+								}
+								else if (isBreakable(play.x - x + 3 * xDir, play.y - y + 3 * yDir) && play.inv[itemNum].id == air)
+								{
+									int searchID = getID(play.x - x + 3 * xDir, play.y - y + 3 * yDir);
+									setID(play.x - x + 3 * xDir, play.y - y + 3 * yDir, air);
+
+									bool foundItem = false;
+									for (int i = 0; i < 256; i++)
+									{
+										if (play.inv[i].id == searchID && play.inv[i].count < 450 && !foundItem)
+										{
+											play.inv[i].count++;
+											foundItem = true;
+										}
+									}
+									for (int i = 0; i < 256; i++)
+									{
+										if (play.inv[i].id == air && !foundItem)
+										{
+											play.inv[i].id = searchID;
+											play.inv[i].count++;
+											foundItem = true;
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+				/*
 				else
 				{
 					for (int x = -1; x < 2; x++)
@@ -937,7 +994,7 @@ void tick()
 							}
 						}
 					}
-				}
+				}*/
 			}
 		}
 	}
