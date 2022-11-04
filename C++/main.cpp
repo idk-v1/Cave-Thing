@@ -1,7 +1,7 @@
 /*
 A shitty game that is sort of like Minecraft, but I don't want to learn 3d maths.
 If you are reading this, good luck. This code follows the rule of "if it works, it works".
-- Ben Hamilton - Oct 30 2022
+- Ben Hamilton - Nov 2, 2022
 */
 
 #include "SFML/Graphics.hpp"
@@ -16,6 +16,7 @@ If you are reading this, good luck. This code follows the rule of "if it works, 
 #include <string>
 #include <fstream>
 #include <iomanip>
+#include <direct.h>
 
 
 int
@@ -53,6 +54,7 @@ lightLevel = 16,
 viewDist = 32,
 mWidth = 500,
 mHeight = 500,
+saveCD = 0,
 
 pageNum = 0;
 
@@ -81,14 +83,16 @@ shift = false,
 caps = false,
 esc = false,
 escL = false,
+enter = false,
+enterL = false,
 regenKey = false,
 lightKey = false,
 
 inGame = false,
 gen = false;
 
-char** terrain; // = new char* [mWidth];
-char** lights = new char* [mWidth];
+char** terrain;
+char** lights;
 
 
 int getID(int xTile, int yTile)
@@ -124,10 +128,10 @@ public:
 	int
 		xVelo = 0,
 		yVelo = 0,
-		x = 1,
-		y = 1,
-		xStart = 1,
-		yStart = 1,
+		x = 2,
+		y = 2,
+		xStart = 2,
+		yStart = 2,
 		dir = 0,
 		width = tileSize * 3,
 		destroyTime = 0,
@@ -208,6 +212,24 @@ public:
 	}
 };
 
+class Image
+{
+public:
+	int x = 0, y = 0, w = 0, h = 0;
+	std::string src = "";
+	sf::Texture img;
+
+	Image(int x, int y, int w, int h, std::string src)
+	{
+		this->x = x * 15;
+		this->y = y * 15;
+		this->w = w * 15;
+		this->h = h * 15;
+		this->src = src;
+		this->img.loadFromFile(src + "/wIcon.png");
+	}
+};
+
 class Page
 {
 public:
@@ -219,10 +241,12 @@ public:
 	int lblNum = 0;
 	std::vector<Title*> ttl;
 	int ttlNum = 0;
+	std::vector<Image*> img;
+	int imgNum = 0;
 	int selID = -1;
 };
 
-Page* pages[3];
+Page* pages[4];
 
 
 SimplexNoise noise;
@@ -252,8 +276,10 @@ public:
 	int** pathTrace = new int* [moveRange * 2 + 3];
 	bool isAg = false;
 
-	Entity(int id)
+	Entity(int id, int x, int y)
 	{
+		this->x = x;
+		this->y = y;
 		for (int x = 0; x < moveRange * 2 + 3; x++)
 		{
 			path[x] = new int[moveRange * 2 + 3];
@@ -333,7 +359,7 @@ public:
 		}
 	}
 
-	void Pathfind()
+	void Pathfind(int xPos, int yPos)
 	{
 		for (int x = 0; x < moveRange * 2 + 3; x++)
 		{
@@ -347,8 +373,8 @@ public:
 		{
 			done = false;
 			PathDiamond(this->moveRange + 1, this->moveRange + 1, this->moveRange);
-			if ((abs(play.x - this->x) + abs(play.y - this->y)) < moveRange)
-				PathTrace(moveRange + 1 + (play.x - this->x), moveRange + 1 + (play.y - this->y), 0);
+			if ((abs(xPos - this->x) + abs(yPos - this->y)) < moveRange)
+				PathTrace(moveRange + 1 + (xPos - this->x), moveRange + 1 + (yPos - this->y), 0);
 
 		}
 	}
@@ -377,6 +403,8 @@ invTileItem,
 minimap;
 
 POINT mPos;
+
+std::string wName = "";
 
 
 int getLight(int xTile, int yTile)
@@ -491,6 +519,7 @@ bool isLight(int x, int y)
 	switch (getID(x, y))
 	{
 	case light:
+	case border:
 		return true;
 		break;
 	default:
@@ -520,33 +549,138 @@ void setID(int xTile, int yTile, int Value)
 }
 
 
+void load(std::string name)
+{
+	std::cout << "Loading... ";
+	wName = name.substr(7);
+	std::fstream file;
+	file.open(name + "/trn.txt");
+	std::string data;
+	if (file.is_open())
+	{
+		int count = 0, width = 0, height = 0;
+		while (std::getline(file, data))
+		{
+			switch (count)
+			{
+			case 0:
+				width = stoi(data);
+				break;
+			case 1:
+				height = stoi(data);
+				break;
+			case 2:
+				seed = stoi(data);
+				break;
+			}
+			count++;
+		}
+		mWidth = width;
+		mHeight = height;
+
+		terrain = new char* [mWidth];
+		lights = new char* [mWidth];
+		for (int x = 0; x < mWidth; x++)
+		{
+			terrain[x] = new char[mHeight];
+			lights[x] = new char[mHeight];
+		}
+
+		std::cout << "\n" << width << "\n" << height << "\n";
+		for (int x = 0; x < mWidth; x++)
+			for (int y = 0; y < mHeight; y++)
+				setID(x, y, std::stoi(data.substr((x + y * width) * 3, 3)));
+		resetLight(true);
+		gen = true;
+	}
+	else std::cout << " Error ";
+	file.close();
+	std::cout << "Done!\n";
+}
+
+
 void save()
 {
-	std::cout << "Saving... ";
-	LPCWSTR worlds = L"worlds";
-	if (CreateDirectory(worlds, NULL) || ERROR_ALREADY_EXISTS == GetLastError())
+	if (_mkdir("worlds") == 0 || errno == EEXIST)
 	{
-		LPCWSTR world1 = L"worlds/world1";
-		if (CreateDirectory(world1, NULL) || ERROR_ALREADY_EXISTS == GetLastError())
+		if (_mkdir(("worlds/" + wName).c_str()) == 0 || errno == EEXIST)
 		{
-			std::ofstream file("worlds/world1/trn.txt", std::ios::binary | std::ios::out);
+			std::ofstream file;
+			file.open("worlds/" + wName + "/trn.txt", std::ios::binary | std::ios::out);
 			if (file.is_open())
 			{
-				for (int x = 0; x < mWidth; x++)
+				file << mWidth << "\n";
+				file << mHeight << "\n";
+				file << seed << "\n";
+				for (int y = 0; y < mHeight; y++)
 				{
-					for (int y = 0; y < mHeight; y++)
+					for (int x = 0; x < mWidth; x++)
 					{
 						file << std::setw(3) << std::setfill('0') << getID(x, y);
 					}
 				}
 				file.close();
-				std::cout << "Done!";
 			}
-			else std::cout << "Error!";
+
+			file.open("worlds/" + wName + "/player.txt", std::ios::binary | std::ios::out);
+			if (file.is_open())
+			{
+				file << play.xStart << "\n";
+				file << play.yStart << "\n";
+				file << play.x << "\n";
+				file << play.y << "\n";
+				file << play.xVelo << "\n";
+				file << play.yVelo << "\n";
+				file << play.speed << "\n";
+				file << play.mineSpeed << "\n";
+				file << play.dir << "\n";
+				file << play.width << "\n";
+				file << play.health << "\n";
+				file << play.light << "\n";
+				file << play.invNum << "\n";
+				for (int i = 0; i < 256; i++)
+				{
+					file << std::setw(3) << std::setfill('0') << play.inv[i].id << std::setw(3) << std::setfill('0') << play.inv[i].count;
+				}
+
+				file.close();
+			}
+
+			std::ifstream manifest;
+			manifest.open("worlds/manifest.txt");
+			if (manifest.is_open())
+			{
+				std::string data;
+				bool exists = false;
+				while (std::getline(manifest, data))
+				{
+					if (data.substr(6) == wName)
+					{
+						exists = true;
+					}
+				}
+				manifest.close();
+				if (!exists)
+				{
+					std::ofstream man;
+					man.open("worlds/manifest.txt", std::ios::app);
+					man << "\n111111" << wName;
+					man.close(); 
+				}
+			}
+			else
+			{
+				manifest.close();
+				std::ofstream man;
+				man.open("worlds/manifest.txt");
+				man << "111111" << wName;
+				man.close();
+			}
+			sf::Image among;
+			among.loadFromFile("res/among.png");
+			among.saveToFile("worlds/" + wName + "/wIcon.png");
 		}
-		else std::cout << "Error!";
 	}
-	else std::cout << "Error!";
 }
 
 
@@ -555,16 +689,17 @@ void generate()
 	if (pages[1]->tbx[2]->str.length() > 0)
 	{
 		int width = std::stoi(pages[1]->tbx[2]->str) * 2;
-		if (width > 4 && width < 32768)
+		if (width > 5 && width < 32768)
 			mWidth = width;
 	}
 	if (pages[1]->tbx[3]->str.length() > 0)
 	{
 		int height = std::stoi(pages[1]->tbx[3]->str) * 2;
-		if (height > 4 && height < 32768)
+		if (height > 5 && height < 32768)
 			mHeight = height;
 	}
 	terrain = new char* [mWidth];
+	lights = new char* [mWidth];
 	for (int x = 0; x < mWidth; x++)
 	{
 		terrain[x] = new char[mHeight];
@@ -588,8 +723,9 @@ void generate()
 	{
 		for (int y = 0; y < mHeight; y++)
 		{
-			if (!std::floor(noise.signedFBM(x * 0.025, y * 0.025, 1.4, 1, 0.4) + 1)) setID(x, y, air);
+			if (!std::floor(noise.signedFBM(x * 0.025, y * 0.025, 1.4, 0.1, 1.4) + 1)) setID(x, y, air);
 			else setID(x, y, stone);
+			if (x == 0 || x == mWidth - 1 || y == 0 || y == mHeight - 1) setID(x, y, border);
 		}
 	}
 	resetLight(true);
@@ -659,7 +795,7 @@ void render()
 	// Draws Player Start
 	light = std::ceil((getLight(play.x, play.y) + 1) / 2.0) * 2.0 / 16.0;
 	playTile.setFillColor(sf::Color(64 * light, 192 * light, 224 * light));
-	playTile.setPosition(int(WIDTH / 2 - play.width / 2), int(HEIGHT / 2 - play.width / 2));
+	playTile.setPosition(WIDTH / 2 - play.width / 2, HEIGHT / 2 - play.width / 2);
 	window.draw(playTile);
 
 	int xOff = 0;
@@ -713,12 +849,12 @@ void render()
 	// Draws Inventory End
 
 	// UNCOMMENT FOR MINIMAP
-	/*for (int x = play.x - viewDist * 0.5; x < play.x + viewDist * 0.5; x++)
+	for (int x = play.x - viewDist * 0.5; x < play.x + viewDist * 0.5; x++)
 	{
 		for (int y = play.y - viewDist * 0.5; y < play.y + viewDist * 0.5; y++)
 		{
 			minimap.setPosition((viewDist * 0.125 + 0.5 - (viewDist * 2 + 1) + ((viewDist + 1) - play.x) * 4) + (x * 4 - 1), (viewDist * 0.125 + 0.5 - (viewDist * 2 + 1) + ((viewDist + 1) - play.y) * 4) + (y * 4 - 1));
-			if (!getID(x, y) || getID(x, y) == 5) minimap.setFillColor(sf::Color(64, 64, 64));
+			if (!isSolid(x, y)) minimap.setFillColor(sf::Color(64, 64, 64));
 			else minimap.setFillColor(sf::Color(32, 32, 32));
 			window.draw(minimap);
 		}
@@ -729,11 +865,12 @@ void render()
 		{
 			minimap.setPosition(viewDist * 2 + 5 + x * 4, viewDist * 2 + 5 + y * 4);
 			window.draw(minimap);
-		}*/
+		}
 		// END UNCOMMENT
 
 	ss.str("");
 	ss << "X: " << play.x << "\nY: " << play.y << "\nSeed: " << seed << "\nMap W: " << mWidth << "\nMap H: " << mHeight << "\nBuild Mode: " << caps * 2 + 1 << "x" << caps * 2 + 1;
+	ss << "\n" << (saveCD > 0 ? "Saving..." : "Saved");
 	debug.setString(ss.str());
 	window.draw(debug);
 
@@ -782,6 +919,10 @@ void key()
 		if (GetKeyState(0x14) == 0) caps = false;
 
 		if (GetAsyncKeyState(0x52) == 0) r = false;
+
+		enterL = enter;
+		if (GetAsyncKeyState(0x0D) < 0) enter = true;
+		if (GetAsyncKeyState(0x0D) == 0) enter = false;
 	}
 
 	clickL = click;
@@ -804,10 +945,10 @@ void lightDiamond(int xTile, int yTile, int Value)
 		if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
 		{
 			setLight(xTile, yTile, Value);
-			if (Value > getLight(xTile, yTile - 1) && (getID(xTile, yTile) == 0 || getID(xTile, yTile) == 5)) lightDiamond(xTile, yTile - 1, Value - 1);
-			if (Value > getLight(xTile + 1, yTile) && (getID(xTile, yTile) == 0 || getID(xTile, yTile) == 5)) lightDiamond(xTile + 1, yTile, Value - 1);
-			if (Value > getLight(xTile, yTile + 1) && (getID(xTile, yTile) == 0 || getID(xTile, yTile) == 5)) lightDiamond(xTile, yTile + 1, Value - 1);
-			if (Value > getLight(xTile - 1, yTile) && (getID(xTile, yTile) == 0 || getID(xTile, yTile) == 5)) lightDiamond(xTile - 1, yTile, Value - 1);
+			if (Value > getLight(xTile, yTile - 1) && !isSolid(xTile, yTile)) lightDiamond(xTile, yTile - 1, Value - 1);
+			if (Value > getLight(xTile + 1, yTile) && !isSolid(xTile, yTile)) lightDiamond(xTile + 1, yTile, Value - 1);
+			if (Value > getLight(xTile, yTile + 1) && !isSolid(xTile, yTile)) lightDiamond(xTile, yTile + 1, Value - 1);
+			if (Value > getLight(xTile - 1, yTile) && !isSolid(xTile, yTile)) lightDiamond(xTile - 1, yTile, Value - 1);
 		}
 	}
 }
@@ -815,10 +956,19 @@ void lightDiamond(int xTile, int yTile, int Value)
 
 void tick()
 {
-	//if (ticks % 3 == 0)
-	//{
-	//	ent[0].Pathfind();
-	//}
+	if (ticks % 3 == 0)
+	{
+		ent[0].Pathfind(play.x, play.y);
+	}
+
+	if (saveCD > 0)
+		saveCD--;
+
+	if (enter && saveCD == 0)
+	{
+		save();
+		saveCD = 25;
+	}
 
 	play.xVelo -= (a * play.speed - d * play.speed);
 	play.yVelo -= (w * play.speed - s * play.speed);
@@ -947,54 +1097,6 @@ void tick()
 						}
 					}
 				}
-				/*
-				else
-				{
-					for (int x = -1; x < 2; x++)
-					{
-						for (int y = -1; y < 2; y++)
-						{
-							if (play.inv[itemNum].id != air && play.inv[itemNum].count > 0)
-							{
-								if (isRemovable(play.x - x + 3 * xDir, play.y - y + 3 * yDir))
-								{
-									setID(play.x - x + 3 * xDir, play.y - y + 3 * yDir, play.inv[itemNum].id);
-									play.inv[itemNum].count--;
-								}
-							}
-							else if (play.inv[itemNum].id == air)
-							{
-								int searchid = getID(play.x - x + 3 * xDir, play.y - y + 3 * yDir);
-								if (searchid != air && isBreakable(play.x - x + 3 * xDir, play.y - y + 3 * yDir))
-								{
-									setID(play.x - x + 3 * xDir, play.y - y + 3 * yDir, 0);
-									bool foundItem = false;
-									for (int i = 0; i < 256; i++)
-									{
-										if (play.inv[i].id == searchid && !foundItem && play.inv[i].count < 450)
-										{
-											play.inv[i].count++;
-											foundItem = true;
-										}
-									}
-									if (!foundItem)
-									{
-										bool foundEmpty = false;
-										for (int i = 0; i < 256; i++)
-										{
-											if (play.inv[i].id == 0 && !foundEmpty)
-											{
-												play.inv[i].count++;
-												play.inv[i].id = searchid;
-												foundEmpty = true;
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}*/
 			}
 		}
 	}
@@ -1098,7 +1200,7 @@ void rMenu()
 					switch (e)
 					{
 					case 0: // Play
-						pageNum = 1;
+						pageNum = 3;
 						break;
 					case 1: // Quit
 						window.close();
@@ -1112,7 +1214,7 @@ void rMenu()
 					switch (e)
 					{
 					case 0: // Back
-						pageNum = 0;
+						pageNum = 3;
 						for (int e = 0; e < pages[i]->tbxNum; e++)
 						{
 							pages[i]->tbx[e]->str = "";
@@ -1120,8 +1222,12 @@ void rMenu()
 						pages[i]->selID = -1;
 						break;
 					case 1: // Create
-						inGame = true;
-						generate();
+						if (pages[i]->tbx[0]->str.length() > 0)
+						{
+							inGame = true;
+							wName = pages[i]->tbx[0]->str;
+							generate();
+						}
 						break;
 					}
 					break; // *********************************
@@ -1138,6 +1244,21 @@ void rMenu()
 						break;
 					}
 					break; // *********************************
+				case 3: // Worlds List ************************
+					switch (e)
+					{
+					case 0: // Back
+						pageNum = 0;
+						break;
+					case 1: // New World
+						pageNum = 1;
+						break;
+					default:
+						load(pages[i]->img[e - 2]->src);
+						//wName = pages[i]->img[e]->src.substr(7);
+						inGame = true;
+					}
+					break; // **********************************
 				}
 			}
 		}
@@ -1199,6 +1320,17 @@ void rMenu()
 		window.draw(btnTxt);
 	}
 
+	// Images
+	for (int e = 0; e < pages[i]->imgNum; e++)
+	{
+		button.setFillColor(sf::Color(255, 255, 255));
+		button.setTexture(&pages[i]->img[e]->img);
+		button.setPosition(pages[i]->img[e]->x, pages[i]->img[e]->y);
+		button.setSize(sf::Vector2f(pages[i]->img[e]->w, pages[i]->img[e]->h));
+		window.draw(button);
+		button.setTexture(NULL);
+	}
+
 	window.display();
 }
 
@@ -1221,6 +1353,7 @@ int main()
 	tex[3] = new sf::Texture; tex[3]->loadFromFile("res/blocks/workbench.png");
 	tex[4] = new sf::Texture; tex[4]->loadFromFile("res/blocks/furnace.png");
 	tex[5] = new sf::Texture; tex[5]->loadFromFile("res/blocks/light.png");
+	tex[6] = new sf::Texture; tex[6]->loadFromFile("res/blocks/border.png");
 
 	// Set Player Inventory - Change Later
 	play.inv[1].count = 100; play.inv[1].id = 5;
@@ -1297,13 +1430,41 @@ int main()
 	pages[2] = new Page;
 
 	pages[2]->btn.push_back(new Button(1, 41, 7, 5, "BACK"));
-	pages[2]->btnNum = 1;
+	pages[2]->btn.push_back(new Button(10, 41, 7, 5, "SAVE"));
+	pages[2]->btnNum = 2;
 
+	
+	pages[3] = new Page;
+
+	pages[3]->btn.push_back(new Button(1, 41, 7, 5, "BACK"));
+	pages[3]->btn.push_back(new Button(18, 5, 28, 9, "NEW WORLD"));
+
+	std::fstream manifest;
+	std::string worlds;
+	manifest.open("worlds/manifest.txt");
+	int count = 0;
+	if (manifest.is_open())
+	{
+		while (std::getline(manifest, worlds))
+		{
+			std::string name = worlds.substr(6);
+			std::string month = worlds.substr(0, 2);
+			std::string day = worlds.substr(2, 2);
+			std::string year = worlds.substr(4, 2);
+			pages[3]->btn.push_back(new Button(18, 16 + count * 11, 18, 9, "\t" + name + "\n\t" + month + "/" + day + "/" + year));
+			pages[3]->img.push_back(new Image(37, 16 + count * 11, 9, 9, "worlds/" + name));
+			count++;
+		}
+	}
+
+	pages[3]->btnNum = 2 + count;
+
+	pages[3]->imgNum = count;
 
 	debug.setFillColor(sf::Color(255, 255, 255));
 	debug.setCharacterSize(15);
 
-	//ent.push_back(Entity(zombie));
+	ent.push_back(Entity(zombie, 8, 8));
 
 	now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
 	last = now;
@@ -1329,11 +1490,10 @@ int main()
 							pages[pageNum]->tbx[pages[pageNum]->selID]->str.pop_back();
 						else if (c == '\r')
 							pages[pageNum]->selID = -1;
+						else if (c == '\t')
+							pages[pageNum]->selID = (pages[pageNum]->selID + 1) % pages[pageNum]->tbxNum;
 						else if (isprint(c))
-						{
-							std::cout << c << "\n";
 							pages[pageNum]->tbx[pages[pageNum]->selID]->str.push_back(c);
-						}
 					}
 				}
 			}
