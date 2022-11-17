@@ -1,7 +1,7 @@
 /*
-A shitty game that is sort of like Minecraft, but I don't want to learn 3d maths.
+A shitty game that is sort of like Minecraft from a top down view, but I don't want to learn 3d maths.
 If you are reading this, good luck. This code follows the rule of "if it works, it works".
-- Ben Hamilton - Nov 2, 2022
+- Ben Hamilton - Nov 17, 2022
 */
 
 #include "SFML/Graphics.hpp"
@@ -19,1455 +19,1426 @@ If you are reading this, good luck. This code follows the rule of "if it works, 
 #include <direct.h>
 
 
-int
-WIDTH = 960,
-HEIGHT = 720;
-
-enum blockID
-{
-	air,
-	stone,
-	bricks,
-	workBench,
-	furnace,
-	light,
-	border,
-	cobblestone,
-	water,
-	waterT,
-	waterR,
-	waterD,
-	waterL,
-	oreIron,
-	oreGold,
-	ore1,
-	ore2,
-	ore3,
-	ore4,
-};
-
-
-int
-tps = 1000 / 20,
-tileSize = 32,
-lightLevel = 16,
-viewDist = 32,
-mWidth = 500,
-mHeight = 500,
-saveCD = 0,
-
-pageNum = 0;
-
-long
-now,
-last,
-delta = 0,
-ticks = 0;
-
-long long seed = 0;
-
-double fps;
-
-std::stringstream ss;
-
-bool
-w = false,
-a = false,
-s = false,
-d = false,
-r = false,
-click = false,
-clickL = false,
-ctrl = false,
-shift = false,
-caps = false,
-esc = false,
-escL = false,
-enter = false,
-enterL = false,
-regenKey = false,
-lightKey = false,
-
-inGame = false,
-gen = false;
-
-char** terrain;
-char** lights;
-
-
-int getID(int xTile, int yTile)
-{
-	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
-		return
-		((terrain[xTile][yTile] >> 0) & 1) +
-		((terrain[xTile][yTile] >> 1) & 1) * 2 +
-		((terrain[xTile][yTile] >> 2) & 1) * 4 +
-		((terrain[xTile][yTile] >> 3) & 1) * 8;
-	else return -1;
-}
-
-
-enum entID
-{
-	zombie,
-	chicken
-};
-
-
-class Item
-{
-public:
-	int count = 0;
-	int id = 0;
-};
-
-
-class Player
-{
-public:
-	int
-		xVelo = 0,
-		yVelo = 0,
-		x = 2,
-		y = 2,
-		xStart = 2,
-		yStart = 2,
-		dir = 0,
-		width = tileSize * 3,
-		destroyTime = 0,
-		mineSpeed = 0,
-		speed = 1,
-		health = 50,
-		invNum = -1;
-
-	Item
-		inv[256];
-
-	bool
-		light = true;
-};
-
-
-class Button
-{
-public:
-	int x = 0, y = 0, w = 0, h = 0;
-	std::string str = "";
-
-	Button(int x, int y, int w, int h, std::string str)
-	{
-		this->x = x * 15;
-		this->y = y * 15;
-		this->w = w * 15;
-		this->h = h * 15;
-		this->str = str;
-	}
-};
-
-class Label
-{
-public:
-	int x = 0, y = 0, w = 0, h = 0;
-	std::string str = "";
-
-	Label(int x, int y, int w, int h, std::string str)
-	{
-		this->x = x * 15;
-		this->y = y * 15;
-		this->w = w * 15;
-		this->h = h * 15;
-		this->str = str;
-	}
-};
-
-class Textbox
-{
-public:
-	int x = 0, y = 0, w = 0, h = 0;
-	bool sel = false;
-	std::string str = "";
-
-	Textbox(int x, int y, int w, int h)
-	{
-		this->x = x * 15;
-		this->y = y * 15;
-		this->w = w * 15;
-		this->h = h * 15;
-	}
-};
-
-class Title
-{
-public:
-	int x = 0, y = 0, w = 0, h = 0;
-	std::string str = "";
-
-	Title(int x, int y, int w, int h, std::string str)
-	{
-		this->x = x * 15;
-		this->y = y * 15;
-		this->w = w * 15;
-		this->h = h * 15;
-		this->str = str;
-	}
-};
-
-class Image
-{
-public:
-	int x = 0, y = 0, w = 0, h = 0;
-	std::string src = "";
-	sf::Texture img;
-
-	Image(int x, int y, int w, int h, std::string src)
-	{
-		this->x = x * 15;
-		this->y = y * 15;
-		this->w = w * 15;
-		this->h = h * 15;
-		this->src = src;
-		this->img.loadFromFile(src + "/wIcon.png");
-	}
-};
-
-class Page
-{
-public:
-	std::vector<Textbox*> tbx;
-	int tbxNum = 0;
-	std::vector<Button*> btn;
-	int btnNum = 0;
-	std::vector<Label*> lbl;
-	int lblNum = 0;
-	std::vector<Title*> ttl;
-	int ttlNum = 0;
-	std::vector<Image*> img;
-	int imgNum = 0;
-	int selID = -1;
-};
-
-Page* pages[4];
-
-
 SimplexNoise noise;
 
-Player
-play,
-def = play;
 
-
-class Entity
+struct Item
 {
-public:
-	int moveRange = 15,
-		health = 25,
-		speed = 1,
-		Velo = 0,
-		yVelo = 0,
-		x = 250,
-		y = 250,
-		dir = 0,
-		width = 0,
-		id = 0;
-	bool done = false;
-
-	sf::Color color;
-	int** path = new int* [moveRange * 2 + 3];
-	int** pathTrace = new int* [moveRange * 2 + 3];
-	bool isAg = false;
-
-	Entity(int id, int x, int y)
+	int id = 0,
+		count = 0;
+	Item(int idp, int countp)
 	{
-		this->x = x;
-		this->y = y;
-		for (int x = 0; x < moveRange * 2 + 3; x++)
-		{
-			path[x] = new int[moveRange * 2 + 3];
-			pathTrace[x] = new int[moveRange * 2 + 3];
-		}
-		switch (id)
-		{
-		case zombie:
-			this->id = zombie;
-			this->speed = 2;
-			this->width = tileSize;
-			this->color = sf::Color(255, 128, 0);
-			this->isAg = true;
-			break;
-		}
-	}
-
-	void PathDiamond(int xTile, int yTile, int Value)
-	{
-		if (Value > 0)
-		{
-			if (xTile >= 0 && xTile < (moveRange * 2 + 3) && yTile >= 0 && yTile < (moveRange * 2 + 3))
-			{
-				path[xTile][yTile] = Value;
-				if (path[xTile][yTile - 1] < Value && !getID(this->x + xTile - moveRange - 1, this->y + yTile - moveRange - 1 - 1)) PathDiamond(xTile, yTile - 1, Value - 1);
-				if (path[xTile + 1][yTile] < Value && !getID(this->x + xTile - moveRange - 1 + 1, this->y + yTile - moveRange - 1)) PathDiamond(xTile + 1, yTile, Value - 1);
-				if (path[xTile][yTile + 1] < Value && !getID(this->x + xTile - moveRange - 1, this->y + yTile - moveRange - 1 + 1)) PathDiamond(xTile, yTile + 1, Value - 1);
-				if (path[xTile - 1][yTile] < Value && !getID(this->x + xTile - moveRange - 1 - 1, this->y + yTile - moveRange - 1)) PathDiamond(xTile - 1, yTile, Value - 1);
-			}
-		}
-	}
-
-	void PathTrace(int xTile, int yTile, int Value)
-	{
-		if (Value <= moveRange)
-		{
-			if (xTile >= 0 && xTile < (moveRange * 2 + 3) && yTile >= 0 && yTile < (moveRange * 2 + 3) && !done)
-			{
-				pathTrace[xTile][yTile] = Value;
-				if (!(xTile == moveRange + 1 && yTile == moveRange + 1))
-				{
-					if (play.x > x)
-					{
-						if (path[xTile + 1][yTile] > Value) PathTrace(xTile + 1, yTile, Value + 1);
-						if (path[xTile][yTile - 1] > Value) PathTrace(xTile, yTile - 1, Value + 1);
-						if (path[xTile][yTile + 1] > Value) PathTrace(xTile, yTile + 1, Value + 1);
-						if (path[xTile - 1][yTile] > Value) PathTrace(xTile - 1, yTile, Value + 1);
-					}
-					else if (play.x < x)
-					{
-						if (path[xTile - 1][yTile] > Value) PathTrace(xTile - 1, yTile, Value + 1);
-						if (path[xTile][yTile - 1] > Value) PathTrace(xTile, yTile - 1, Value + 1);
-						if (path[xTile + 1][yTile] > Value) PathTrace(xTile + 1, yTile, Value + 1);
-						if (path[xTile][yTile + 1] > Value) PathTrace(xTile, yTile + 1, Value + 1);
-					}
-					else if (play.y > y)
-					{
-						if (path[xTile][yTile + 1] > Value) PathTrace(xTile, yTile + 1, Value + 1);
-						if (path[xTile][yTile - 1] > Value) PathTrace(xTile, yTile - 1, Value + 1);
-						if (path[xTile + 1][yTile] > Value) PathTrace(xTile + 1, yTile, Value + 1);
-						if (path[xTile - 1][yTile] > Value) PathTrace(xTile - 1, yTile, Value + 1);
-					}
-					else
-					{
-						if (path[xTile][yTile - 1] > Value) PathTrace(xTile, yTile - 1, Value + 1);
-						if (path[xTile + 1][yTile] > Value) PathTrace(xTile + 1, yTile, Value + 1);
-						if (path[xTile][yTile + 1] > Value) PathTrace(xTile, yTile + 1, Value + 1);
-						if (path[xTile - 1][yTile] > Value) PathTrace(xTile - 1, yTile, Value + 1);
-					}
-				}
-				else done = true;
-				/*
-					for movement compare all sides for largest then move
-					otherwise it will go backwards
-				*/
-			}
-		}
-	}
-
-	void Pathfind(int xPos, int yPos)
-	{
-		for (int x = 0; x < moveRange * 2 + 3; x++)
-		{
-			for (int y = 0; y < moveRange * 2 + 3; y++)
-			{
-				path[x][y] = 0;
-				pathTrace[x][y] = 0;
-			}
-		}
-		if (isAg)
-		{
-			done = false;
-			PathDiamond(this->moveRange + 1, this->moveRange + 1, this->moveRange);
-			if ((abs(xPos - this->x) + abs(yPos - this->y)) < moveRange)
-				PathTrace(moveRange + 1 + (xPos - this->x), moveRange + 1 + (yPos - this->y), 0);
-
-		}
+		id = idp;
+		count = countp;
 	}
 };
 
-std::vector<Entity> ent;
+
+struct Tile
+{
+	char id = 0,
+		grow = 0,
+		light = 0;
+};
+sf::Texture* tex[256];
 
 
-sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "Cave", sf::Style::Titlebar | sf::Style::Close);
+struct InvElement
+{
+	int x = 0,
+		y = 0,
+		w = 0,
+		h = 0,
+		id = 0,
+		count = 0;
+	InvElement(double xp, double yp, double wp, double hp)
+	{
+		x = xp * 15;
+		y = yp * 15;
+		w = wp * 15;
+		h = hp * 15;
+	}
+};
+std::vector<InvElement*>invEle;
+std::vector<InvElement*>guiEle;
 
+
+POINT mpos;
+
+
+std::vector<int>settings;
+std::vector<int>settingsid;
+std::vector<int>tmpsettings;
+std::vector<int>tmpsettingsid;
+
+int width = 960,
+	height = 720,
+	mwidth = 500,
+	mheight = 500,
+
+	tps = 1000 / 20,
+
+	tilesize = 32,
+	viewdist = 1,
+	loaddist = 3,
+
+	pagenum = 0,
+	
+	invsel = -1;
+
+long now = 0,
+	last = 0,
+	delta = 0,
+
+	ticks = 0,
+	ticksS = 0,
+
+	seed;
+
+bool 
+	w = false, wL = false,
+	a = false, aL = false,
+	s = false, sL = false,
+	d = false, dL = false,
+
+	q = false, qL = false,
+	e = false, eL = false,
+	r = false, rL = false,
+	l = false, lL = false,
+
+	esc = false, escL = false,
+	ctrl = false, ctrlL = false,
+	shift = false, shiftL = false,
+	enter = false, enterL = false,
+
+	one = false, two = false, thr = false,
+	fou = false, fiv = false, six = false,
+	sev = false, eig = false, nin = false,
+	zer = false,
+
+	left = false, leftL = false,
+	right = false, rightL = false,
+
+	focus = true,
+	ininv = false,
+	ingame = false,
+	pause = false;
+
+// ELEMENTS #######################################################################################
+struct BTN
+{
+	int x = 0,
+		y = 0,
+		w = 0,
+		h = 0,
+		fs = 0,
+		evt = 0;
+	std::string str = "";
+	BTN(int xp, int yp, int wp, int hp, int fsp, int evtp, std::string strp)
+	{
+		x = xp;
+		y = yp;
+		w = wp;
+		h = hp;
+		fs = fsp;
+		evt = evtp;
+		str = strp;
+	}
+};
+
+struct TTL
+{
+	int x = 0,
+		y = 0,
+		w = 0,
+		h = 0,
+		fs = 0;
+	std::string str = "";
+	TTL(int xp, int yp, int wp, int hp, int fsp, std::string strp)
+	{
+		x = xp;
+		y = yp;
+		w = wp;
+		h = hp;
+		fs = fsp;
+		str = strp;
+	}
+};
+
+struct LBL
+{
+	int x = 0,
+		y = 0,
+		w = 0,
+		h = 0,
+		fs = 0;
+	std::string str = "";
+	LBL(int xp, int yp, int wp, int hp, int fsp, std::string strp)
+	{
+		x = xp;
+		y = yp;
+		w = wp;
+		h = hp;
+		fs = fsp;
+		str = strp;
+	}
+};
+
+struct SLD
+{
+	int x = 0,
+		y = 0,
+		w = 0,
+		h = 0,
+		fs = 0,
+		val = 0,
+		id = 0;
+	std::string str = "";
+	SLD(int xp, int yp, int wp, int hp, int fsp, int valp, int idp, std::string strp)
+	{
+		x = xp;
+		y = yp;
+		w = wp;
+		h = hp;
+		fs = fsp;
+		val = valp;
+		id = idp;
+		str = strp;
+	}
+};
+
+
+struct PAGE
+{
+	std::vector<BTN*>btn;
+	std::vector<TTL*>ttl;
+	std::vector<LBL*>lbl;
+	std::vector<SLD*>sld;
+	//std::vector<>;
+	//std::vector<>;
+	int sel = 0;
+};
+std::vector<PAGE*>Pages;
+// ################################################################################################
+
+
+struct Chunk
+{
+	int x = 0,
+		y = 0;
+	Tile** tiles[16];
+	Tile** tilesf[16];
+	Chunk(int xp, int yp)
+	{
+		x = xp;
+		y = yp;
+
+		for (int x = 0; x < 16; x++)
+		{
+			tiles[x] = new Tile*[16];
+			tilesf[x] = new Tile*[16];
+			for (int y = 0; y < 16; y++)
+			{
+				tiles[x][y] = new Tile;
+				tilesf[x][y] = new Tile;
+			}
+		}
+	}
+};
+std::vector<Chunk*> chunks;
+
+
+struct Player
+{
+	int x = 0,
+		y = 0,
+		xv = 0,
+		yv = 0,
+		xc = 0,
+		yc = 0,
+		rad = tilesize * 3,
+		rot = 0,
+		mode = 0,
+		anprog = 0,
+		mineprog = 0,
+		minedist = 5,
+		minedistcur = 0,
+		minespeed = 1,
+		invsel = 0,
+		health = 50,
+		energy = 50,
+		enrch = 0,
+		damage = 10,
+		speed = 1;
+	bool light = true;
+	Item* inv[72];
+	Player()
+	{
+		for (int i = 0; i < 72; i++)
+		{
+			inv[i] = new Item(0, 0);
+		}
+	}
+};
+Player p;
+
+
+sf::RenderWindow window(sf::VideoMode(width, height), "Cave", sf::Style::Titlebar | sf::Style::Close);
+sf::RectangleShape rect;
+sf::ConvexShape cnvx;
+sf::Texture texture;
 sf::Font font;
-
-sf::Text debug, worldText1, itemNum, btnTxt;
-
-sf::Texture* tex[16];
-
-sf::RectangleShape
-frame,
-button,
-worldOpt1,
-
-tile,
-playTile,
-invTile,
-invTileItem,
-minimap;
-
-POINT mPos;
-
-std::string wName = "";
-
-
-int getLight(int xTile, int yTile)
-{
-	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
-		return lights[xTile][yTile];
-}
-
-
-void setLight(int xTile, int yTile, int Level)
-{
-	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
-		lights[xTile][yTile] = Level;
-}
-
-
-void resetLight(bool init)
-{
-	if (init)
-	{
-		for (int x = 0; x < mWidth; x++)
-		{
-			for (int y = 0; y < mHeight; y++)
-			{
-				if (x >= 0 && x < mWidth && y >= 0 && y < mHeight)
-					lights[x][y] = (char)0;
-			}
-		}
-	}
-	else
-	{
-		for (int x = play.x - viewDist; x < play.x + viewDist; x++)
-		{
-			for (int y = play.y - viewDist; y < play.y + viewDist; y++)
-			{
-				if (x >= 0 && x < mWidth && y >= 0 && y < mHeight)
-					lights[x][y] = (char)0;
-			}
-		}
-	}
-}
-
-
-bool isBreakable(int x, int y)
-{
-	switch (getID(x, y))
-	{
-	case stone:
-	case bricks:
-	case workBench:
-	case furnace:
-	case light:
-	case cobblestone:
-	case oreIron:
-	case oreGold:
-	case ore1:
-	case ore2:
-	case ore3:
-	case ore4:
-		return true;
-		break;
-	default:
-		return false;
-	}
-}
-
-
-bool isSolid(int x, int y)
-{
-	switch (getID(x, y))
-	{
-	case stone:
-	case bricks:
-	case workBench:
-	case furnace:
-	case border:
-	case cobblestone:
-	case oreIron:
-	case oreGold:
-	case ore1:
-	case ore2:
-	case ore3:
-	case ore4:
-		return true;
-		break;
-	default:
-		return false;
-	}
-}
-
-
-bool isRemovable(int x, int y)
-{
-	switch (getID(x, y))
-	{
-	case air:
-	case water:
-	case waterT:
-	case waterR:
-	case waterD:
-	case waterL:
-		return true;
-		break;
-	default:
-		return false;
-	}
-}
-
-
-bool isLight(int x, int y)
-{
-	switch (getID(x, y))
-	{
-	case light:
-	case border:
-		return true;
-		break;
-	default:
-		return false;
-	}
-}
-
-
-void setID(int xTile, int yTile, int Value)
-{
-	if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
-	{
-		terrain[xTile][yTile] &= ~(1 << 3);
-		terrain[xTile][yTile] &= ~(1 << 2);
-		terrain[xTile][yTile] &= ~(1 << 1);
-		terrain[xTile][yTile] &= ~(1 << 0);
-
-		if (Value >= 8) { Value -= 8; terrain[xTile][yTile] |= 1 << 3; }
-		else terrain[xTile][yTile] |= 0 << 3;
-		if (Value >= 4) { Value -= 4; terrain[xTile][yTile] |= 1 << 2; }
-		else terrain[xTile][yTile] |= 0 << 2;
-		if (Value >= 2) { Value -= 2; terrain[xTile][yTile] |= 1 << 1; }
-		else terrain[xTile][yTile] |= 0 << 1;
-		if (Value >= 1) { Value -= 1; terrain[xTile][yTile] |= 1 << 0; }
-		else terrain[xTile][yTile] |= 0 << 0;
-	}
-}
-
-
-void load(std::string name)
-{
-	std::cout << "Loading... ";
-	wName = name.substr(7);
-	std::fstream file;
-	file.open(name + "/trn.txt");
-	std::string data;
-	if (file.is_open())
-	{
-		int count = 0, width = 0, height = 0;
-		while (std::getline(file, data))
-		{
-			switch (count)
-			{
-			case 0:
-				width = stoi(data);
-				break;
-			case 1:
-				height = stoi(data);
-				break;
-			case 2:
-				seed = stoi(data);
-				break;
-			}
-			count++;
-		}
-		mWidth = width;
-		mHeight = height;
-
-		terrain = new char* [mWidth];
-		lights = new char* [mWidth];
-		for (int x = 0; x < mWidth; x++)
-		{
-			terrain[x] = new char[mHeight];
-			lights[x] = new char[mHeight];
-		}
-
-		std::cout << "\n" << width << "\n" << height << "\n";
-		for (int x = 0; x < mWidth; x++)
-			for (int y = 0; y < mHeight; y++)
-				setID(x, y, std::stoi(data.substr((x + y * width) * 3, 3)));
-		resetLight(true);
-		gen = true;
-	}
-	else std::cout << " Error ";
-	file.close();
-	std::cout << "Done!\n";
-}
+sf::Text text;
 
 
 void save()
 {
-	if (_mkdir("worlds") == 0 || errno == EEXIST)
+
+}
+
+
+void load()
+{
+
+}
+
+
+void addInv(int id)
+{
+	bool found = false;
+	if (id != 0)
 	{
-		if (_mkdir(("worlds/" + wName).c_str()) == 0 || errno == EEXIST)
+		for (int i = 0; i < 72; i++)
 		{
-			std::ofstream file;
-			file.open("worlds/" + wName + "/trn.txt", std::ios::binary | std::ios::out);
-			if (file.is_open())
+			if (p.inv[i]->id == id && p.inv[i]->count < 450 && !found)
 			{
-				file << mWidth << "\n";
-				file << mHeight << "\n";
-				file << seed << "\n";
-				for (int y = 0; y < mHeight; y++)
-				{
-					for (int x = 0; x < mWidth; x++)
-					{
-						file << std::setw(3) << std::setfill('0') << getID(x, y);
-					}
-				}
-				file.close();
+				p.inv[i]->count++;
+				found = true;
 			}
-
-			file.open("worlds/" + wName + "/player.txt", std::ios::binary | std::ios::out);
-			if (file.is_open())
+		}
+		if (!found)
+		{
+			for (int i = 0; i < 72; i++)
 			{
-				file << play.xStart << "\n";
-				file << play.yStart << "\n";
-				file << play.x << "\n";
-				file << play.y << "\n";
-				file << play.xVelo << "\n";
-				file << play.yVelo << "\n";
-				file << play.speed << "\n";
-				file << play.mineSpeed << "\n";
-				file << play.dir << "\n";
-				file << play.width << "\n";
-				file << play.health << "\n";
-				file << play.light << "\n";
-				file << play.invNum << "\n";
-				for (int i = 0; i < 256; i++)
+				if (p.inv[i]->id == 0 && !found)
 				{
-					file << std::setw(3) << std::setfill('0') << play.inv[i].id << std::setw(3) << std::setfill('0') << play.inv[i].count;
-				}
-
-				file.close();
-			}
-
-			std::ifstream manifest;
-			manifest.open("worlds/manifest.txt");
-			if (manifest.is_open())
-			{
-				std::string data;
-				bool exists = false;
-				while (std::getline(manifest, data))
-				{
-					if (data.substr(6) == wName)
-					{
-						exists = true;
-					}
-				}
-				manifest.close();
-				if (!exists)
-				{
-					std::ofstream man;
-					man.open("worlds/manifest.txt", std::ios::app);
-					man << "\n111111" << wName;
-					man.close(); 
+					p.inv[i]->id = id;
+					p.inv[i]->count++;
+					found = true;
 				}
 			}
-			else
-			{
-				manifest.close();
-				std::ofstream man;
-				man.open("worlds/manifest.txt");
-				man << "111111" << wName;
-				man.close();
-			}
-			sf::Image among;
-			among.loadFromFile("res/among.png");
-			among.saveToFile("worlds/" + wName + "/wIcon.png");
 		}
 	}
 }
 
 
-void generate()
+int getChunkID(int x, int y, int xc, int yc)
 {
-	if (pages[1]->tbx[2]->str.length() > 0)
-	{
-		int width = std::stoi(pages[1]->tbx[2]->str) * 2;
-		if (width > 5 && width < 32768)
-			mWidth = width;
-	}
-	if (pages[1]->tbx[3]->str.length() > 0)
-	{
-		int height = std::stoi(pages[1]->tbx[3]->str) * 2;
-		if (height > 5 && height < 32768)
-			mHeight = height;
-	}
-	terrain = new char* [mWidth];
-	lights = new char* [mWidth];
-	for (int x = 0; x < mWidth; x++)
-	{
-		terrain[x] = new char[mHeight];
-		lights[x] = new char[mHeight];
-	}
+	int xx = xc;
+	int yy = yc;
+	if (x < 0) xx--;
+	if (x >= 16) xx++;
+	if (y < 0) yy--;
+	if (y >= 16) yy++;
 
-	int r = std::hash<time_t>{}(time(nullptr));
-	noise.setSeed(r);
-	seed = r;
-	if (pages[1]->tbx[1]->str.length() > 4 && pages[1]->tbx[1]->str.length() < 11)
-	{
-		bool isnum = true;
-		for (int i = 0; i < pages[1]->tbx[1]->str.length(); i++)
-			if (!isdigit(pages[1]->tbx[1]->str[i])) isnum = false;
-		if (isnum)
-			seed = std::stol(pages[1]->tbx[1]->str);
-		noise.setSeed(seed);
-	}
+	for (int i = 0; i < chunks.size(); i++)
+		if (chunks[i]->x == xx && chunks[i]->y == yy)
+			return i;
+	return -1;
+}
 
-	for (int x = 0; x < mWidth; x++)
+
+int getTileID(int x, int y, int xc, int yc)
+{
+	int xx = x;
+	int yy = y;
+	int i = getChunkID(x, y, xc, yc);
+	if (i != -1)
 	{
-		for (int y = 0; y < mHeight; y++)
+		if (x < 0) xx += 16;
+		if (x >= 16) xx -= 16;
+		if (y < 0) yy += 16;
+		if (y >= 16) yy -= 16;
+		return chunks[i]->tiles[xx][yy]->id;
+	}
+	return -1;
+}
+
+
+void setTileID(int x, int y, int xc, int yc, int id)
+{
+	int xx = x;
+	int yy = y;
+	int i = getChunkID(x, y, xc, yc);
+	if (i != -1)
+	{
+		if (x < 0) xx += 16;
+		if (x >= 16) xx -= 16;
+		if (y < 0) yy += 16;
+		if (y >= 16) yy -= 16;
+		chunks[i]->tiles[xx][yy]->id = id;
+	}
+}
+
+
+int getTileLight(int x, int y, int xc, int yc)
+{
+	int xx = x;
+	int yy = y;
+	int i = getChunkID(x, y, xc, yc);
+	if (i != -1)
+	{
+		if (x < 0) xx += 16;
+		if (x >= 16) xx -= 16;
+		if (y < 0) yy += 16;
+		if (y >= 16) yy -= 16;
+		return chunks[i]->tiles[xx][yy]->light;
+	}
+	return -1;
+}
+
+
+void setTileLight(int x, int y, int xc, int yc, int light)
+{
+	int xx = x;
+	int yy = y;
+	int i = getChunkID(x, y, xc, yc);
+	if (i != -1)
+	{
+		if (x < 0) xx += 16;
+		if (x >= 16) xx -= 16;
+		if (y < 0) yy += 16;
+		if (y >= 16) yy -= 16;
+		chunks[i]->tiles[xx][yy]->light = light;
+	}
+}
+
+
+void lightDiamond(int x, int y, int xc, int yc, int light)
+{
+	if (light > 0)
+	{
+		if (getTileLight(x, y - 1, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
 		{
-			if (!std::floor(noise.signedFBM(x * 0.025, y * 0.025, 1.4, 0.1, 1.4) + 1)) setID(x, y, air);
-			else setID(x, y, stone);
-			if (x == 0 || x == mWidth - 1 || y == 0 || y == mHeight - 1) setID(x, y, border);
+			setTileLight(x, y - 1, xc, yc, light);
+			lightDiamond(x, y - 1, xc, yc, light - 1);
+		}
+
+		if (getTileLight(x + 1, y, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
+		{
+			setTileLight(x + 1, y, xc, yc, light);
+			lightDiamond(x + 1, y, xc, yc, light - 1);
+		}
+
+		if (getTileLight(x, y + 1, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
+		{
+			setTileLight(x, y + 1, xc, yc, light);
+			lightDiamond(x, y + 1, xc, yc, light - 1);
+		}
+
+		if (getTileLight(x - 1, y, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
+		{
+			setTileLight(x - 1, y, xc, yc, light);
+			lightDiamond(x - 1, y, xc, yc, light - 1);
 		}
 	}
-	resetLight(true);
+}
+
+
+void generate(int xc, int yc)
+{
+	double noiseX, noiseY, noiseLvl;
+	Chunk* c = new Chunk(xc, yc);
+
+	for (int x = 0; x < 16; x++)
+		for (int y = 0; y < 16; y++)
+		{
+			noiseX = (xc * 16.0 + x) * 0.015625;
+			noiseY = (yc * 16.0 + y) * 0.015625;
+			noiseLvl = noise.unsignedFBM(noiseX, noiseY, 3, 2.5, 0.3) + 0.625;
+			c->tiles[x][y]->id = int(noiseLvl);
+
+			c->tilesf[x][y]->id = 1;
+		}
+	chunks.push_back(c);
+}
+
+
+void initGen()
+{
+	for (int x = p.xc - loaddist; x < p.xc + loaddist + 1; x++)
+		for (int y = p.yc - loaddist; y < p.yc + loaddist + 1; y++)
+		{
+			int i = getChunkID(0, 0, -x, -y);
+			if (i == -1)
+				generate(-x, -y);
+		}
 	for (int x = -1; x < 2; x++)
 		for (int y = -1; y < 2; y++)
-			setID(play.x - x, play.y - y, air);
-	gen = true;
-	save();
+			setTileID(p.x + x, p.y + y, -p.xc, -p.yc, 0);
 }
 
 
 void render()
 {
+	int i, xpos, ypos, id, idf;
 	double light;
 	window.clear();
 
-	// Draws Tiles Start
-	for (int x = play.x - viewDist; x < play.x + viewDist; x++)
-	{
-		for (int y = play.y - viewDist; y < play.y + viewDist; y++)
+	rect.setSize(sf::Vector2f(tilesize, tilesize));
+	rect.setOutlineThickness(0);
+
+	// Get all chunks in view distance
+	for (int cx = p.xc - viewdist; cx < p.xc + viewdist + 1; cx++)
+		for (int cy = p.yc - viewdist; cy < p.yc + viewdist + 1; cy++)
 		{
-			if (x >= 0 && x < mWidth && y >= 0 && y < mHeight)
+			// If chunk exists, draw it
+			i = getChunkID(0, 0, -cx, -cy);
+			if (i != -1)
 			{
-				light = std::ceil((getLight(x, y) + 1)) * (1 / 16.0);
-				tile.setFillColor(sf::Color(std::ceil(255 * light), std::ceil(224 * light), std::ceil(128 * light)));
-				tile.setTexture(tex[getID(x, y)]);
-				tile.setPosition(sf::Vector2f((WIDTH * 0.5 - mWidth * 0.5 * tileSize + (mWidth / 2 - play.x) * tileSize) + (x * tileSize - tileSize * 0.5), (HEIGHT * 0.5 - mHeight * 0.5 * tileSize + (mHeight / 2 - play.y) * tileSize) + (y * tileSize - tileSize * 0.5)));
-				window.draw(tile);
+				// Draw all tiles in chunk
+				for (int x = 0; x < 16; x++)
+					for (int y = 0; y < 16; y++)
+					{
+						xpos = width / 2.0 + (chunks[i]->x * 16.0 + x + p.xc * 16.0 - p.x) * tilesize - tilesize / 2.0;
+						ypos = height / 2.0 + (chunks[i]->y * 16.0 + y + p.yc * 16.0 - p.y) * tilesize - tilesize / 2.0;
+						rect.setPosition(xpos, ypos);
+
+						light = (getTileLight(x, y, -cx, -cy) + 4.0) / 16.0;
+						if (light < 0.25) light = 0.25;
+						//int r = std::hash<time_t>{}(x * 3.0 / y - cx * 16.0 + y * 5.0 - cy * 16.0 / x * cy) % 4;
+
+						// Get id of tile, then set fill color
+						rect.setFillColor(sf::Color(255 * light, 255 * light, 255 * light));
+						id = chunks[i]->tiles[x][y]->id;
+						switch (id)
+						{
+						case 0:
+							idf = chunks[i]->tilesf[x][y]->id;
+							rect.setFillColor(sf::Color(160 * light, 160 * light, 160 * light));
+							rect.setTexture(tex[idf]);
+							break;
+						default:
+							rect.setTexture(tex[id]);
+						}
+						window.draw(rect);
+					}
+			}
+		}
+
+	// Draws Mining Animation
+	if (p.mineprog > 0)
+	{
+		int xpos = width / 2 - p.rad / 2 + tilesize;
+		int ypos = height / 2 - p.rad / 2 + tilesize;
+		rect.setTexture(tex[2]);
+		rect.setFillColor(sf::Color(255 * (p.mineprog * 0.066 + 0.33), 255 * (p.mineprog * 0.066 + 0.33), 255 * (p.mineprog * 0.066 + 0.33), 128));
+
+		cnvx.setFillColor(sf::Color(255 * (p.mineprog * 0.066 + 0.33), 0, 0, 128));
+		cnvx.setPointCount(3);
+		cnvx.setPoint(0, sf::Vector2f(width / 2, height / 2));
+		cnvx.setPoint(1, sf::Vector2f(width / 2, height / 2));
+		cnvx.setPoint(2, sf::Vector2f(width / 2, height / 2));
+
+		switch (p.rot)
+		{
+		case 0:
+			rect.setPosition(xpos - tilesize, ypos - tilesize * (2 + p.minedistcur));
+			rect.setSize(sf::Vector2f(p.rad, tilesize));
+			window.draw(rect);
+
+			cnvx.setPoint(1, sf::Vector2f(width / 2 - p.rad / 2, height / 2 - (p.rad / 2 + tilesize * p.minedistcur)));
+			cnvx.setPoint(2, sf::Vector2f(width / 2 + p.rad / 2, height / 2 - (p.rad / 2 + tilesize * p.minedistcur)));
+			break;
+		case 90:
+			rect.setPosition(xpos + tilesize * (2 + p.minedistcur), ypos - tilesize);
+			rect.setSize(sf::Vector2f(tilesize, p.rad));
+			window.draw(rect);
+
+			cnvx.setPoint(1, sf::Vector2f(width / 2 + (p.rad / 2 + tilesize * p.minedistcur), height / 2 - p.rad / 2));
+			cnvx.setPoint(2, sf::Vector2f(width / 2 + (p.rad / 2 + tilesize * p.minedistcur), height / 2 + p.rad / 2));
+			break;
+		case 180:
+			rect.setPosition(xpos - tilesize, ypos + tilesize * (2 + p.minedistcur));
+			rect.setSize(sf::Vector2f(p.rad, tilesize));
+			window.draw(rect);
+
+			cnvx.setPoint(1, sf::Vector2f(width / 2 - p.rad / 2, height / 2 + (p.rad / 2 + tilesize * p.minedistcur)));
+			cnvx.setPoint(2, sf::Vector2f(width / 2 + p.rad / 2, height / 2 + (p.rad / 2 + tilesize * p.minedistcur)));
+			break;
+		case 270:
+			rect.setPosition(xpos - tilesize * (2 + p.minedistcur), ypos - tilesize);
+			rect.setSize(sf::Vector2f(tilesize, p.rad));
+			window.draw(rect);
+
+			cnvx.setPoint(1, sf::Vector2f(width / 2 - (p.rad / 2 + tilesize * p.minedistcur), height / 2 - p.rad / 2));
+			cnvx.setPoint(2, sf::Vector2f(width / 2 - (p.rad / 2 + tilesize * p.minedistcur), height / 2 + p.rad / 2));
+			break;
+		}
+
+		window.draw(cnvx);
+	}
+
+	rect.setFillColor(sf::Color(255, 255, 255));
+	rect.setTexture(tex[2]);
+	rect.setPosition(width / 2 - p.rad / 2, height / 2 - p.rad / 2);
+	rect.setSize(sf::Vector2f(p.rad, p.rad));
+	window.draw(rect);
+
+	// Draws Inventory
+	if (ininv)
+	{
+		rect.setFillColor(sf::Color(0, 0, 0, 128));
+		rect.setSize(sf::Vector2f(width, height));
+		rect.setPosition(0, 0);
+		rect.setTexture(tex[0]);
+		window.draw(rect);
+	}
+
+	// Draw GUI
+	for (int i = 0; i < invEle.size(); i++)
+	{
+		rect.setTexture(tex[0]);
+		if (i < 12)
+		{
+			if (p.invsel == i || p.mode + 9 == i)
+			{
+				rect.setSize(sf::Vector2f(invEle[i]->w + 10, invEle[i]->h + 10));
+				rect.setPosition(invEle[i]->x - 5, invEle[i]->y - 5);
+			}
+			else
+			{
+				rect.setSize(sf::Vector2f(invEle[i]->w, invEle[i]->h));
+				rect.setPosition(invEle[i]->x, invEle[i]->y);
+			}
+			rect.setFillColor(sf::Color(128, 128, 128));
+			window.draw(rect);
+
+			rect.setFillColor(sf::Color(64, 64, 64));
+			if (p.invsel == i)
+			{
+				rect.setSize(sf::Vector2f(invEle[i]->w, invEle[i]->h));
+				rect.setPosition(invEle[i]->x, invEle[i]->y);
+			}
+			else
+			{
+				rect.setSize(sf::Vector2f(invEle[i]->w - 10, invEle[i]->h - 10));
+				rect.setPosition(invEle[i]->x + 5, invEle[i]->y + 5);
+			}
+			window.draw(rect);
+
+			if (p.inv[i]->id != 0)
+			{
+				rect.setOutlineThickness(0);
+				rect.setTexture(tex[p.inv[i]->id]);
+				rect.setFillColor(sf::Color(255, 255, 255));
+				window.draw(rect);
+				text.setPosition(invEle[i]->x + 5, invEle[i]->y + 5);
+				text.setString(std::to_string(p.inv[i]->count));
+				text.setCharacterSize(10);
+				text.setFillColor(sf::Color(255, 255, 255));
+				window.draw(text);
 			}
 		}
 	}
-	// Draws Tiles End
 
-	// Draws Entities Start
-	for (int i = 0; i < ent.size(); i++)
+	for (int i = 0; i < guiEle.size(); i++)
 	{
-		for (int x = 0; x < ent[i].moveRange * 2 + 3; x++)
+		rect.setFillColor(sf::Color(128, 128, 128));
+		rect.setSize(sf::Vector2f(guiEle[i]->w, guiEle[i]->h));
+		rect.setPosition(guiEle[i]->x, guiEle[i]->y);
+		window.draw(rect);
+
+		rect.setFillColor(sf::Color(64, 64, 64));
+		rect.setSize(sf::Vector2f(guiEle[i]->w - 10, guiEle[i]->h - 10));
+		rect.setPosition(guiEle[i]->x + 5, guiEle[i]->y + 5);
+		window.draw(rect);
+
+		if (i == 0)
 		{
-			for (int y = 0; y < ent[i].moveRange * 2 + 3; y++)
-			{
-				if (ent[i].pathTrace[x][y])
-				{
-					tile.setTexture(tex[0]);
-					tile.setPosition(sf::Vector2f((WIDTH * 0.5 - mWidth * 0.5 * tileSize + (mWidth / 2 - play.x) * tileSize) + ((x + ent[i].x - ent[i].moveRange / 2 + 1 - std::floor(ent[i].moveRange / 5) * 3 - 1) * tileSize - tileSize * 0.5), (HEIGHT * 0.5 - mHeight * 0.5 * tileSize + (mHeight / 2 - play.y) * tileSize) + ((y + ent[i].y - ent[i].moveRange / 2 + 1 - std::floor(ent[i].moveRange / 5) * 3 - 1)) * tileSize - tileSize * 0.5));
-					if (ent[i].pathTrace[x][y]) tile.setFillColor(sf::Color(0, 255 * (ent[i].pathTrace[x][y] * (1.0 / ent[i].moveRange)), 0));
-					window.draw(tile);
-				}
-			}
+			rect.setFillColor(sf::Color(64 + 190 - p.energy * 1.8, 64, 64));
+			window.draw(rect);
+		}
+		if (i == 1)
+		{
+			rect.setFillColor(sf::Color(64 + 190 - p.health * 1.9, 64 + p.health * 1.9, 64));
+			window.draw(rect);
 		}
 	}
-
-	for (int i = 0; i < ent.size(); i++)
-	{
-		if (ent[i].x > play.x - viewDist && ent[i].x < play.x + viewDist && ent[i].y > play.y - viewDist && ent[i].y < play.y + viewDist)
-		{
-			tile.setTexture(tex[0]);
-			for (int x = -std::floor(ent[i].width / 2); x < std::floor(ent[i].width / 2); x++)
-				for (int y = -std::floor(ent[i].width / 2); y < std::floor(ent[i].width / 2); y++)
-					tile.setPosition(sf::Vector2f((WIDTH * 0.5 - mWidth * 0.5 * tileSize + (mWidth / 2 - play.x) * tileSize) + ((ent[i].x + x - (tileSize / 2 - 1)) * tileSize - tileSize * 0.5), (HEIGHT * 0.5 - mHeight * 0.5 * tileSize + (mHeight / 2 - play.y) * tileSize) + ((ent[i].y + y - (tileSize / 2 - 1)) * tileSize - tileSize * 0.5)));
-			tile.setFillColor(ent[i].color);
-			window.draw(tile);
-		}
-	}
-
-	// Draws Entities End
-
-	// Draws Player Start
-	light = std::ceil((getLight(play.x, play.y) + 1) / 2.0) * 2.0 / 16.0;
-	playTile.setFillColor(sf::Color(64 * light, 192 * light, 224 * light));
-	playTile.setPosition(WIDTH / 2 - play.width / 2, HEIGHT / 2 - play.width / 2);
-	window.draw(playTile);
-
-	int xOff = 0;
-	int yOff = 0;
-	int pd = play.dir;
-	if (pd == 7 || pd == 0 || pd == 1) yOff--;
-	if (pd == 1 || pd == 2 || pd == 3) xOff++;
-	if (pd == 3 || pd == 4 || pd == 5) yOff++;
-	if (pd == 5 || pd == 6 || pd == 7) xOff--;
-
-	tile.setPosition(WIDTH / 2 - tileSize / 2 + tileSize * xOff, HEIGHT / 2 - tileSize / 2 + tileSize * yOff);
-	tile.setFillColor(sf::Color(96, 224, 255));
-	tile.setTexture(tex[0]);
-	window.draw(tile);
-
-	if (play.dir == 0 || play.dir == 2 || play.dir == 4 || play.dir == 6)
-	{
-		if (caps)
-		{
-			playTile.setPosition(WIDTH / 2 - tileSize / 2 + play.width * xOff - tileSize, HEIGHT / 2 - tileSize / 2 + play.width * yOff - tileSize);
-			playTile.setFillColor(sf::Color(255, 0, 0, 128 * play.destroyTime * 0.1));
-			window.draw(playTile);
-		}
-		else
-		{
-			tile.setPosition(WIDTH / 2 - tileSize / 2 + 2 * tileSize * xOff, HEIGHT / 2 - tileSize / 2 + 2 * tileSize * yOff);
-			tile.setFillColor(sf::Color(255, 0, 0, 128 * play.destroyTime * 0.1));
-			window.draw(tile);
-		}
-	}
-	// Draws Player End
-
-	// Draws Inventory Start
-	for (int i = 0; i < 9; i++)
-	{
-		if (play.invNum == 8 - i) invTile.setFillColor(sf::Color(96, 96, 96));
-		else invTile.setFillColor(sf::Color(64, 64, 64));
-		invTile.setPosition(WIDTH / 2 - (i - 4) * 55 - 25, HEIGHT - 75);
-		window.draw(invTile);
-		invTileItem.setFillColor(sf::Color(255, 255, 255));
-		invTileItem.setTexture(tex[play.inv[8 - i].id]);
-		invTileItem.setPosition(WIDTH / 2 - (i - 4) * 55 - 16, HEIGHT - 75 + 9);
-		window.draw(invTileItem);
-
-		itemNum.setPosition(WIDTH / 2 - (i - 4) * 55 - 16, HEIGHT - 75 - 2);
-		ss.str("");
-		ss << play.inv[8 - i].count;
-		itemNum.setString(ss.str());
-		window.draw(itemNum);
-	}
-	// Draws Inventory End
-
-	// UNCOMMENT FOR MINIMAP
-	for (int x = play.x - viewDist * 0.5; x < play.x + viewDist * 0.5; x++)
-	{
-		for (int y = play.y - viewDist * 0.5; y < play.y + viewDist * 0.5; y++)
-		{
-			minimap.setPosition((viewDist * 0.125 + 0.5 - (viewDist * 2 + 1) + ((viewDist + 1) - play.x) * 4) + (x * 4 - 1), (viewDist * 0.125 + 0.5 - (viewDist * 2 + 1) + ((viewDist + 1) - play.y) * 4) + (y * 4 - 1));
-			if (!isSolid(x, y)) minimap.setFillColor(sf::Color(64, 64, 64));
-			else minimap.setFillColor(sf::Color(32, 32, 32));
-			window.draw(minimap);
-		}
-	}
-	minimap.setFillColor(sf::Color(96, 224, 255));
-	for (int x = -1; x < 2; x++)
-		for (int y = -1; y < 2; y++)
-		{
-			minimap.setPosition(viewDist * 2 + 5 + x * 4, viewDist * 2 + 5 + y * 4);
-			window.draw(minimap);
-		}
-		// END UNCOMMENT
-
-	ss.str("");
-	ss << "X: " << play.x << "\nY: " << play.y << "\nSeed: " << seed << "\nMap W: " << mWidth << "\nMap H: " << mHeight << "\nBuild Mode: " << caps * 2 + 1 << "x" << caps * 2 + 1;
-	ss << "\n" << (saveCD > 0 ? "Saving..." : "Saved");
-	debug.setString(ss.str());
-	window.draw(debug);
 
 	window.display();
 }
 
 
-void key()
+void rmenu()
 {
-	// "0xnn < 0" Means Key is Down
-	// "0xnn == 0" Means Key is Up
+	// FILL BACKGROUND ############################################################################
+	rect.setFillColor(sf::Color(0, 0, 0, 32));
+	rect.setOutlineColor(sf::Color(0, 0, 0, 0));
+	rect.setPosition(0, 0);
+	rect.setSize(sf::Vector2f(width, height));
+	window.draw(rect);
+	// ############################################################################################
 
-	if (inGame)
+	if (Pages.size() > 0)
 	{
-		if (GetAsyncKeyState(0x30) < 0) play.invNum = -1;
-		if (GetAsyncKeyState(0x31) < 0) play.invNum = 0;
-		if (GetAsyncKeyState(0x32) < 0) play.invNum = 1;
-		if (GetAsyncKeyState(0x33) < 0) play.invNum = 2;
-		if (GetAsyncKeyState(0x34) < 0) play.invNum = 3;
-		if (GetAsyncKeyState(0x35) < 0) play.invNum = 4;
-		if (GetAsyncKeyState(0x36) < 0) play.invNum = 5;
-		if (GetAsyncKeyState(0x37) < 0) play.invNum = 6;
-		if (GetAsyncKeyState(0x38) < 0) play.invNum = 7;
-		if (GetAsyncKeyState(0x39) < 0) play.invNum = 8;
-
-		if (GetAsyncKeyState(0x57) < 0) w = true;
-		if (GetAsyncKeyState(0x41) < 0) a = true;
-		if (GetAsyncKeyState(0x53) < 0) s = true;
-		if (GetAsyncKeyState(0x44) < 0) d = true;
-
-		if (GetAsyncKeyState(0x10) < 0) shift = true;
-		if (GetAsyncKeyState(0x11) < 0) ctrl = true;
-
-		if (GetKeyState(0x14) < 0) caps = true;
-
-		if (GetAsyncKeyState(0x52) < 0) r = true;
-
-		if (GetAsyncKeyState(0x57) == 0) w = false;
-		if (GetAsyncKeyState(0x41) == 0) a = false;
-		if (GetAsyncKeyState(0x53) == 0) s = false;
-		if (GetAsyncKeyState(0x44) == 0) d = false;
-
-		if (GetAsyncKeyState(0x10) == 0) shift = false;
-		if (GetAsyncKeyState(0x11) == 0) ctrl = false;
-
-		if (GetKeyState(0x14) == 0) caps = false;
-
-		if (GetAsyncKeyState(0x52) == 0) r = false;
-
-		enterL = enter;
-		if (GetAsyncKeyState(0x0D) < 0) enter = true;
-		if (GetAsyncKeyState(0x0D) == 0) enter = false;
-	}
-
-	clickL = click;
-	if (GetAsyncKeyState(0x01) < 0) click = true;
-	if (GetAsyncKeyState(0x01) == 0) click = false;
-
-	escL = esc;
-	if (GetAsyncKeyState(0x1B) < 0) esc = true;
-	if (GetAsyncKeyState(0x1B) == 0) esc = false;
-
-	GetCursorPos(&mPos);
-	ScreenToClient(window.getSystemHandle(), &mPos);
-}
-
-
-void lightDiamond(int xTile, int yTile, int Value)
-{
-	if (Value > 0)
-	{
-		if (xTile >= 0 && xTile < mWidth && yTile >= 0 && yTile < mHeight)
+		// DRAW BUTTON ###########################################################################
+		for (int i = 0; i < Pages[pagenum]->btn.size(); i++)
 		{
-			setLight(xTile, yTile, Value);
-			if (Value > getLight(xTile, yTile - 1) && !isSolid(xTile, yTile)) lightDiamond(xTile, yTile - 1, Value - 1);
-			if (Value > getLight(xTile + 1, yTile) && !isSolid(xTile, yTile)) lightDiamond(xTile + 1, yTile, Value - 1);
-			if (Value > getLight(xTile, yTile + 1) && !isSolid(xTile, yTile)) lightDiamond(xTile, yTile + 1, Value - 1);
-			if (Value > getLight(xTile - 1, yTile) && !isSolid(xTile, yTile)) lightDiamond(xTile - 1, yTile, Value - 1);
-		}
-	}
-}
+			BTN btn = *Pages[pagenum]->btn[i];
 
+			btn.y += std::sin(ticks / 10.0) * 10 - 5;
 
-void tick()
-{
-	if (ticks % 3 == 0)
-	{
-		ent[0].Pathfind(play.x, play.y);
-	}
-
-	if (saveCD > 0)
-		saveCD--;
-
-	if (enter && saveCD == 0)
-	{
-		save();
-		saveCD = 25;
-	}
-
-	play.xVelo -= (a * play.speed - d * play.speed);
-	play.yVelo -= (w * play.speed - s * play.speed);
-
-	for (int i = 0; i < 256; i++)
-	{
-		if (play.inv[i].count == 0)
-		{
-			play.inv[i].id = 0;
-		}
-	}
-
-	if (ctrl)
-	{
-		play.destroyTime++;
-		if (play.destroyTime >= 10)
-		{
-			play.destroyTime = 0;
-
-			int xDir = 0;
-			int yDir = 0;
-			bool placeOk = true;
-
-			switch (play.dir)
+			if (mpos.x >= btn.x && mpos.x <= btn.x + btn.w && mpos.y >= btn.y && mpos.y <= btn.y + btn.h)
 			{
-			case 0:
-				yDir = -1;
-				break;
-			case 2:
-				xDir = 1;
-				break;
-			case 4:
-				yDir = 1;
-				break;
-			case 6:
-				xDir = -1;
-				break;
-			default:
-				placeOk = false;
-			}
+				rect.setFillColor(sf::Color(224, 32, 32));
+				rect.setOutlineColor(sf::Color(255, 64, 64));
+				text.setFillColor(sf::Color(255, 64, 64));
+				btn.x -= 5; btn.y -= 5;
+				btn.w += 10; btn.h += 10;
+				btn.fs += 5;
 
-			if (placeOk)
-			{
-				int itemNum = play.invNum;
-				if (play.invNum == -1) itemNum = 255;
-
-				if (!caps)
+				// BUTTON EVENTS ##################################################################
+				if (!left && leftL)
 				{
-					if (play.inv[itemNum].count > 0 || play.inv[itemNum].id == air)
+					if (btn.evt < 100 && btn.evt >= 0) // GOTO PAGE
 					{
-						if (isRemovable(play.x + 2 * xDir, play.y + 2 * yDir))
-						{
-							setID(play.x + 2 * xDir, play.y + 2 * yDir, play.inv[itemNum].id);
-							if (play.inv[itemNum].id != air)
-							{
-								play.inv[itemNum].count--;
-							}
-						}
-						else if (isBreakable(play.x + 2 * xDir, play.y + 2 * yDir) && play.inv[itemNum].id == air)
-						{
-							int searchID = getID(play.x + 2 * xDir, play.y + 2 * yDir);
-							setID(play.x + 2 * xDir, play.y + 2 * yDir, air);
-
-							bool foundItem = false;
-							for (int i = 0; i < 256; i++)
-							{
-								if (play.inv[i].id == searchID && play.inv[i].count < 450 && !foundItem)
-								{
-									play.inv[i].count++;
-									foundItem = true;
-								}
-							}
-							for (int i = 0; i < 256; i++)
-							{
-								if (play.inv[i].id == air && !foundItem)
-								{
-									play.inv[i].id = searchID;
-									play.inv[i].count++;
-									foundItem = true;
-								}
-							}
-						}
+						pagenum = btn.evt;
+						tmpsettings.clear();
+						tmpsettingsid.clear();
 					}
-				}
-				else
-				{
-					if (play.inv[itemNum].count > 8 || play.inv[itemNum].id == air)
-					{
-						for (int x = -1; x < 2; x++)
-						{
-							for (int y = -1; y < 2; y++)
-							{
-								if (isRemovable(play.x - x + 3 * xDir, play.y - y + 3 * yDir))
-								{
-									setID(play.x - x + 3 * xDir, play.y - y + 3 * yDir, play.inv[itemNum].id);
-									if (play.inv[itemNum].id != air)
-									{
-										play.inv[itemNum].count--;
-									}
-								}
-								else if (isBreakable(play.x - x + 3 * xDir, play.y - y + 3 * yDir) && play.inv[itemNum].id == air)
-								{
-									int searchID = getID(play.x - x + 3 * xDir, play.y - y + 3 * yDir);
-									setID(play.x - x + 3 * xDir, play.y - y + 3 * yDir, air);
-
-									bool foundItem = false;
-									for (int i = 0; i < 256; i++)
-									{
-										if (play.inv[i].id == searchID && play.inv[i].count < 450 && !foundItem)
-										{
-											play.inv[i].count++;
-											foundItem = true;
-										}
-									}
-									for (int i = 0; i < 256; i++)
-									{
-										if (play.inv[i].id == air && !foundItem)
-										{
-											play.inv[i].id = searchID;
-											play.inv[i].count++;
-											foundItem = true;
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	else play.destroyTime = 0;
-
-	if (shift && !lightKey) play.light = !play.light;
-	lightKey = shift;
-
-	if (play.xVelo > 0)
-		for (int x = 0; x < play.xVelo; x++)
-			if (play.x + 2 < mWidth)
-				if (!isSolid(play.x + 2, play.y - 1) && !isSolid(play.x + 2, play.y) && !isSolid(play.x + 2, play.y + 1))
-					play.x += play.speed;
-	if (play.xVelo < 0)
-		for (int x = 0; x > play.xVelo; x--)
-			if (play.x - 1 > 0)
-				if (!isSolid(play.x - 2, play.y - 1) && !isSolid(play.x - 2, play.y) && !isSolid(play.x - 2, play.y + 1))
-					play.x -= play.speed;
-	if (play.yVelo > 0)
-		for (int y = 0; y < play.yVelo; y++)
-			if (play.y + 1 <= mHeight)
-				if (!isSolid(play.x - 1, play.y + 2) && !isSolid(play.x, play.y + 2) && !isSolid(play.x + 1, play.y + 2))
-					play.y += play.speed;
-	if (play.yVelo < 0)
-		for (int y = 0; y > play.yVelo; y--)
-			if (play.y - 1 > 0)
-				if (!isSolid(play.x - 1, play.y - 2) && !isSolid(play.x, play.y - 2) && !isSolid(play.x + 1, play.y - 2))
-					play.y -= play.speed;
-
-	if (play.x <= 0 + 1) play.x = 0 + 1;
-	if (play.x > mWidth - 2) play.x = mWidth - 2;
-	if (play.y - 1 <= 0) play.y = 1;
-	if (play.y + 2 > mHeight) play.y = mHeight - 2;
-
-	if (w && !d && !a) play.dir = 0;
-	if (w && d) play.dir = 1;
-	if (d && !w && !s) play.dir = 2;
-	if (d && s) play.dir = 3;
-	if (s && !a && !d) play.dir = 4;
-	if (s && a) play.dir = 5;
-	if (a && !w && !s) play.dir = 6;
-	if (a && w) play.dir = 7;
-
-	play.xVelo = play.xVelo * 0.25;
-	play.yVelo = play.yVelo * 0.25;
-
-	if (r && !regenKey)
-	{
-		play = def;
-		if (shift)
-		{
-			noise.randomizeSeed();
-			generate();
-		}
-	}
-	regenKey = r;
-
-	for (int x = play.x - viewDist * 2; x < play.x + viewDist * 2; x++)
-	{
-		for (int y = play.y - viewDist * 2; y < play.y + viewDist * 2; y++)
-		{
-			setLight(x, y, 0);
-		}
-	}
-
-	if (play.light) lightDiamond(play.x, play.y, 15);
-
-	for (int x = play.x - viewDist - 15; x < play.x + viewDist + 15; x++)
-		for (int y = play.y - viewDist - 15; y < play.y + viewDist + 15; y++)
-			if (isLight(x, y)) lightDiamond(x, y, 12);
-}
-
-
-void rMenu()
-{
-	window.clear();
-
-	frame.setFillColor(sf::Color(20, 40, 80));
-	window.draw(frame);
-
-	int i = pageNum;
-	// Buttons
-	for (int e = 0; e < pages[i]->btnNum; e++)
-	{
-		button.setPosition(pages[i]->btn[e]->x, pages[i]->btn[e]->y);
-		button.setSize(sf::Vector2f(pages[i]->btn[e]->w, pages[i]->btn[e]->h));
-
-		btnTxt.setCharacterSize(30);
-		btnTxt.setPosition(pages[i]->btn[e]->x + 0.5 * pages[i]->btn[e]->w - 9 * pages[i]->btn[e]->str.length(), pages[i]->btn[e]->y + 0.5 * pages[i]->btn[e]->h - 20);
-		btnTxt.setString(pages[i]->btn[e]->str);
-
-		if (mPos.x >= pages[i]->btn[e]->x && mPos.x < pages[i]->btn[e]->x + pages[i]->btn[e]->w &&
-			mPos.y >= pages[i]->btn[e]->y && mPos.y < pages[i]->btn[e]->y + pages[i]->btn[e]->h)
-		{
-			button.setFillColor(sf::Color(96, 96, 96));
-			if (!click && clickL)
-			{
-				switch (pageNum)
-				{
-				case 0: // Main Menu ***********************
-					switch (e)
-					{
-					case 0: // Play
-						pageNum = 3;
-						break;
-					case 1: // Quit
+					if (btn.evt == 100) // EXIT
 						window.close();
-						break;
-					case 2: // Settings
-						pageNum = 2;
-						break;
-					}
-					break; // *********************************
-				case 1: // Create World ***********************
-					switch (e)
+					if (btn.evt == 101) // CREATE WORLD
 					{
-					case 0: // Back
-						pageNum = 3;
-						for (int e = 0; e < pages[i]->tbxNum; e++)
+						for (int f = 0; f < settingsid.size(); f++)
 						{
-							pages[i]->tbx[e]->str = "";
+							int val = -1;
+							for (int m = 0; m < Pages.size(); m++)
+							{
+								for (int d = 0; d < Pages[m]->sld.size(); d++)
+								{
+									if (settingsid[f] == Pages[m]->sld[d]->id)
+									{
+										SLD sld = *Pages[m]->sld[d];
+										int stops = 1, parselen;
+										std::vector<std::string>stop;
+										for (int s = 0; s < sld.str.length(); s++)
+											if (sld.str[s] == ',')
+												stops++;
+										for (int s = 0; s < stops + 1; s++)
+										{
+											parselen = sld.str.find(',');
+											if (parselen != std::string::npos)
+											{
+												stop.push_back(sld.str.substr(0, parselen));
+												sld.str.erase(0, parselen + 1);
+											}
+										}
+										stop.push_back(sld.str);
+										val = stoi(stop[settings[f]]);
+									}
+								}
+							}
+
+							switch (settingsid[f])
+							{
+							case 0:
+								tilesize = val;
+								break;
+							case 1:
+								viewdist = val;
+								break;
+							case 2:
+								loaddist = val;
+							}
 						}
-						pages[i]->selID = -1;
-						break;
-					case 1: // Create
-						if (pages[i]->tbx[0]->str.length() > 0)
-						{
-							inGame = true;
-							wName = pages[i]->tbx[0]->str;
-							generate();
-						}
-						break;
+						initGen();
+						p = Player();
+						ingame = true;
 					}
-					break; // *********************************
-				case 2: // Settings ***************************
-					switch (e)
+					if (btn.evt == 102) // SAVE SETTINGS
 					{
-					case 0: // Back
-						pageNum = 0;
-						for (int e = 0; e < pages[i]->tbxNum; e++)
+						// Check for duplicates and set values
+						for (int p = 0; p < tmpsettingsid.size(); p++)
 						{
-							pages[i]->tbx[e]->str = "";
+							int index = -1;
+							for (int s = 0; s < settingsid.size(); s++)
+								if (tmpsettingsid[p] == settingsid[s])
+									index = s;
+							if (index == -1)
+							{
+								settingsid.push_back(tmpsettingsid[p]);
+								settings.push_back(tmpsettings[p]);
+							}
+							else
+							{
+								settingsid[index] = tmpsettingsid[p];
+								settings[index] = tmpsettings[p];
+							}
 						}
-						pages[i]->selID = -1;
-						break;
+
+						std::string data;
+						std::fstream file("res/settings.txt", std::ios::out);
+						file << "";
+						for (int f = 0; f < settingsid.size(); f++)
+							file << settings[f] << ":" << settingsid[f] << "\n";
+						file.close();
 					}
-					break; // *********************************
-				case 3: // Worlds List ************************
-					switch (e)
-					{
-					case 0: // Back
-						pageNum = 0;
-						break;
-					case 1: // New World
-						pageNum = 1;
-						break;
-					default:
-						load(pages[i]->img[e - 2]->src);
-						//wName = pages[i]->img[e]->src.substr(7);
-						inGame = true;
-					}
-					break; // **********************************
+				}
+				// ################################################################################
+			}
+			else
+			{
+				rect.setFillColor(sf::Color(128, 128, 128));
+				rect.setOutlineColor(sf::Color(160, 160, 160));
+				text.setFillColor(sf::Color(160, 160, 160));
+			}
+
+			rect.setOutlineThickness(5);
+			rect.setSize(sf::Vector2f(btn.w, btn.h));
+			rect.setPosition(btn.x, btn.y);
+			rect.setTexture(tex[0]);
+			window.draw(rect);
+
+			text.setCharacterSize(btn.fs);
+			text.setString(btn.str);
+			text.setPosition(btn.x, btn.y);
+			text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5, 
+				rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - btn.fs * 0.25);
+			window.draw(text);
+		}
+		// ########################################################################################
+
+		// DRAW TITLE #############################################################################
+		for (int i = 0; i < Pages[pagenum]->ttl.size(); i++)
+		{
+			TTL ttl = *Pages[pagenum]->ttl[i];
+
+			ttl.y += std::sin(ticks / 10.0) * 10 - 5;
+
+			rect.setSize(sf::Vector2f(ttl.w, ttl.h));
+			rect.setPosition(ttl.x, ttl.y);
+
+			text.setFillColor(sf::Color(255, 64, 64));
+			text.setCharacterSize(ttl.fs);
+			text.setString(ttl.str);
+			text.setPosition(ttl.x, ttl.y);
+			text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5, rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - ttl.fs * 0.25);
+			window.draw(text);
+		}
+		// ########################################################################################
+
+		// DRAW LABEL #############################################################################
+		for (int i = 0; i < Pages[pagenum]->lbl.size(); i++)
+		{
+			LBL lbl = *Pages[pagenum]->lbl[i];
+
+			lbl.y += std::sin(ticks / 10.0) * 10 - 5;
+
+			rect.setSize(sf::Vector2f(lbl.w, lbl.h));
+			rect.setPosition(lbl.x, lbl.y);
+			rect.setFillColor(sf::Color(128, 128, 128));
+			rect.setOutlineColor(sf::Color(160, 160, 160));
+			window.draw(rect);
+
+			text.setFillColor(sf::Color(160, 160, 160));
+			text.setCharacterSize(lbl.fs);
+			text.setString(lbl.str);
+			text.setPosition(lbl.x, lbl.y);
+			text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5, rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - lbl.fs * 0.25);
+			window.draw(text);
+		}
+		// ########################################################################################
+
+		// DRAW SLIDER ############################################################################
+		for (int i = 0; i < Pages[pagenum]->sld.size(); i++)
+		{
+			SLD sld = *Pages[pagenum]->sld[i];
+			int index = -1;
+			for (int s = 0; s < tmpsettingsid.size(); s++)
+				if (tmpsettingsid[s] == sld.id)
+				{
+					sld.val = tmpsettings[s];
+					index = s;
+				}
+			if (index == -1)
+				for (int s = 0; s < settingsid.size(); s++)
+					if (settingsid[s] == sld.id)
+						sld.val = settings[s];
+			int stops = 1, parselen;
+			std::vector<std::string>stop;
+			for (int s = 0; s < sld.str.length(); s++)
+				if (sld.str[s] == ',')
+					stops++;
+			for (int s = 0; s < stops + 1; s++)
+			{
+				parselen = sld.str.find(',');
+				if (parselen != std::string::npos)
+				{
+					stop.push_back(sld.str.substr(0, parselen));
+					sld.str.erase(0, parselen + 1);
 				}
 			}
-		}
-		else
-			button.setFillColor(sf::Color(64, 64, 64));
+			stop.push_back(sld.str);
 
-		window.draw(button);
-		window.draw(btnTxt);
-	}
+			sld.y += std::sin(ticks / 10.0) * 10 - 5;
 
-	// Titles
-	for (int e = 0; e < pages[i]->ttlNum; e++)
-	{
-		double charSz = 85 + 15.0 * std::sin(ticks / 4.0);
-		btnTxt.setCharacterSize(charSz);
-		btnTxt.setPosition(pages[i]->ttl[e]->x + 0.5 * pages[i]->ttl[e]->w - (charSz * 0.3) * pages[i]->ttl[e]->str.length(), pages[i]->ttl[e]->y + 0.5 * pages[i]->ttl[e]->h - (charSz * 0.667));
-		btnTxt.setString(pages[i]->ttl[e]->str);
+			rect.setFillColor(sf::Color(128, 128, 128));
+			rect.setOutlineColor(sf::Color(160, 160, 160));
+			rect.setSize(sf::Vector2f(sld.w, sld.h - 30));
+			rect.setPosition(sld.x, sld.y + 15);
+			window.draw(rect);
 
-		window.draw(btnTxt);
-	}
-
-	// Labels
-	for (int e = 0; e < pages[i]->lblNum; e++)
-	{
-		button.setPosition(pages[i]->lbl[e]->x, pages[i]->lbl[e]->y);
-		button.setSize(sf::Vector2f(pages[i]->lbl[e]->w, pages[i]->lbl[e]->h));
-		button.setFillColor(sf::Color(64, 64, 64));
-
-		btnTxt.setCharacterSize(30);
-		btnTxt.setPosition(pages[i]->lbl[e]->x + 0.5 * pages[i]->lbl[e]->w - 9 * pages[i]->lbl[e]->str.length(), pages[i]->lbl[e]->y + 0.5 * pages[i]->lbl[e]->h - 20);
-		btnTxt.setString(pages[i]->lbl[e]->str);
-
-		window.draw(button);
-		window.draw(btnTxt);
-	}
-
-	// Textboxes
-	for (int e = 0; e < pages[i]->tbxNum; e++)
-	{
-		button.setPosition(pages[i]->tbx[e]->x, pages[i]->tbx[e]->y);
-		button.setSize(sf::Vector2f(pages[i]->tbx[e]->w, pages[i]->tbx[e]->h));
-
-		btnTxt.setCharacterSize(30);
-		btnTxt.setPosition(pages[i]->tbx[e]->x + 0.5 * pages[i]->tbx[e]->w - 9 * pages[i]->tbx[e]->str.length(), pages[i]->tbx[e]->y + 0.5 * pages[i]->tbx[e]->h - 20);
-		btnTxt.setString(pages[i]->tbx[e]->str);
-
-		if ((mPos.x >= pages[i]->tbx[e]->x && mPos.x < pages[i]->tbx[e]->x + pages[i]->tbx[e]->w &&
-			mPos.y >= pages[i]->tbx[e]->y && mPos.y < pages[i]->tbx[e]->y + pages[i]->tbx[e]->h) || pages[i]->selID == e)
-		{
-			button.setFillColor(sf::Color(96, 96, 96));
-			if (!click && clickL)
+			if (mpos.x >= sld.x && mpos.x <= sld.x + sld.w && mpos.y >= sld.y && mpos.y <= sld.y + sld.h)
 			{
-				pages[i]->selID = e;
+				rect.setFillColor(sf::Color(224, 32, 32));
+				rect.setOutlineColor(sf::Color(255, 64, 64));
+				if (left)
+				{
+					sld.val = std::min(int(mpos.x - sld.x) / (sld.w / stops), stops - 1);
+
+					int index = -1;
+					for (int s = 0; s < tmpsettingsid.size(); s++)
+						if (sld.id == tmpsettingsid[s])
+							index = s;
+					if (index == -1)
+					{
+						tmpsettingsid.push_back(sld.id);
+						tmpsettings.push_back(sld.val);
+					}
+					else
+					{
+						tmpsettingsid[index] = sld.id;
+						tmpsettings[index] = sld.val;
+					}
+				}
 			}
+			else
+			{
+				rect.setFillColor(sf::Color(128, 128, 128));
+				rect.setOutlineColor(sf::Color(160, 160, 160));
+			}
+
+			rect.setSize(sf::Vector2f(64, sld.h));
+			rect.setPosition(sld.x + sld.val * (sld.w / stops), sld.y);
+			window.draw(rect);
+
+			text.setFillColor(sf::Color(160, 160, 160));
+			text.setCharacterSize(sld.fs);
+			text.setString(stop[sld.val]);
+			text.setPosition(sld.x, sld.y);
+			text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5, rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - sld.fs * 0.25);
+			window.draw(text);
 		}
-		else button.setFillColor(sf::Color(64, 64, 64));
-
-		window.draw(button);
-		window.draw(btnTxt);
-	}
-
-	// Images
-	for (int e = 0; e < pages[i]->imgNum; e++)
-	{
-		button.setFillColor(sf::Color(255, 255, 255));
-		button.setTexture(&pages[i]->img[e]->img);
-		button.setPosition(pages[i]->img[e]->x, pages[i]->img[e]->y);
-		button.setSize(sf::Vector2f(pages[i]->img[e]->w, pages[i]->img[e]->h));
-		window.draw(button);
-		button.setTexture(NULL);
+		// ########################################################################################
 	}
 
 	window.display();
+}
+
+
+void update()
+{
+	// COOLDOWN ###################################################################################
+	if (p.enrch < -5) 
+		p.energy++;
+	p.enrch--;
+	if (p.energy > 100) 
+		p.energy = 100;
+	if (p.energy < 0) 
+		p.energy = 0;
+	// ############################################################################################
+
+	if (!ininv)
+	{
+		// GENERATE NEW CHUNKS ####################################################################
+		for (int x = p.xc - loaddist; x < p.xc + loaddist + 1; x++)
+			for (int y = p.yc - loaddist; y < p.yc + loaddist + 1; y++)
+			{
+				int i = getChunkID(0, 0, -x, -y);
+				if (i == -1)
+					generate(-x, -y);
+			}
+		// ########################################################################################
+
+
+		// PLAYER MOVEMENT ########################################################################
+		int lastposx = p.x;
+		int lastposy = p.y;
+		int speed = p.speed;
+		int mines = p.minespeed;
+		p.yv += -int(w) + int(s);
+		p.xv += -int(a) + int(d);
+
+		if (shift && p.energy > 0)
+		{
+			speed += 2;
+			mines += 2;
+		}
+
+		if (p.yv < 0)
+			for (int i = 0; i < speed * abs(p.yv); i++)
+			{
+				bool move = true;
+				for (int x = -1; x < 2; x++)
+					if (getTileID(p.x + x, p.y - 2, -p.xc, -p.yc) != 0)
+						move = false;
+				if (move)
+				{
+					p.y--;
+					if (shift)
+					{
+						p.energy -= 0.1;
+						p.enrch = 10;
+					}
+				}
+			}
+		if (p.yv > 0)
+			for (int i = 0; i < speed * abs(p.yv); i++)
+			{
+				bool move = true;
+				for (int x = -1; x < 2; x++)
+					if (getTileID(p.x + x, p.y + 2, -p.xc, -p.yc) != 0)
+						move = false;
+				if (move)
+				{
+					p.y++;
+					if (shift)
+					{
+						p.energy -= 0.1;
+						p.enrch = 10;
+					}
+				}
+			}
+		if (p.xv < 0)
+			for (int i = 0; i < speed * abs(p.xv); i++)
+			{
+				bool move = true;
+				for (int y = -1; y < 2; y++)
+					if (getTileID(p.x - 2, p.y + y, -p.xc, -p.yc) != 0)
+						move = false;
+				if (move)
+				{
+					p.x--;
+					if (shift)
+					{
+						p.energy -= 0.1;
+						p.enrch = 10;
+					}
+				}
+			}
+		if (p.xv > 0)
+			for (int i = 0; i < speed * abs(p.xv); i++)
+			{
+				bool move = true;
+				for (int y = -1; y < 2; y++)
+					if (getTileID(p.x + 2, p.y + y, -p.xc, -p.yc) != 0)
+						move = false;
+				if (move)
+				{
+					p.x++;
+					if (shift)
+					{
+						p.energy -= 0.1;
+						p.enrch = 10;
+					}
+				}
+			}
+
+		p.yv *= 0.5;
+		p.xv *= 0.5;
+		// ########################################################################################
+
+
+		// POSITION TO CHUNKS #####################################################################
+		if (p.y < 0) 
+		{ 
+			p.y += 16; 
+			p.yc++; 
+		}
+		if (p.y >= 16) 
+		{ 
+			p.y -= 16; 
+			p.yc--; 
+		}
+		if (p.x < 0) 
+		{ 
+			p.x += 16;
+			p.xc++; 
+		}
+		if (p.x >= 16) 
+		{
+			p.x -= 16;
+			p.xc--;
+		}
+		// ########################################################################################
+
+
+		// RESET MINE PROGRESS ####################################################################
+		if (p.x != lastposx || p.y != lastposy)
+			p.minedistcur = 0;
+		// ########################################################################################
+
+		int x = (p.rot == 90) - (p.rot == 270);
+		int y = (p.rot == 180) - (p.rot == 0);
+
+		// DESTROY TILES ##########################################################################
+		if (left)
+		{
+			switch (p.mode)
+			{
+			case 0: // 3x1
+			{
+				for (int s = 0; s < mines; s++)
+				{
+					if (p.energy > 2 && p.mineprog >= 10)
+					{
+						for (int i = -1; i < 2; i++)
+						{
+							if (getTileID(p.x + i * std::abs(y) + (2 + p.minedistcur) * x, p.y + i * std::abs(x) + (2 + p.minedistcur) * y, -p.xc, -p.yc) != 0)
+							{
+								p.energy -= 0.25;
+								p.enrch = 10;
+							}
+							addInv(getTileID(p.x + i * std::abs(y) + (2 + p.minedistcur) * x, p.y + i * std::abs(x) + (2 + p.minedistcur) * y, -p.xc, -p.yc));
+							setTileID(p.x + i * std::abs(y) + (2 + p.minedistcur) * x, p.y + i * std::abs(x) + (2 + p.minedistcur) * y, -p.xc, -p.yc, 0);
+						}
+						p.mineprog -= 10;
+						p.minedistcur++;
+						if (p.minedistcur >= p.minedist)
+							p.minedistcur -= p.minedist;
+					}
+					p.mineprog++;
+				}
+				break;
+			}
+			case 1: // ATTACK
+				break;
+			case 2: // 1x1
+			{
+				for (int s = 0; s < mines; s++)
+				{
+					if (p.energy > 0 && p.mineprog >= 10)
+					{
+						if (getTileID(p.x + (2 + p.minedistcur) * x, p.y + (2 + p.minedistcur) * y, -p.xc, -p.yc) != 0)
+						{
+							p.energy -= 0.25;
+							p.enrch = 10;
+						}
+						addInv(getTileID(p.x + (2 + p.minedistcur) * x, p.y + (2 + p.minedistcur) * y, -p.xc, -p.yc));
+						setTileID(p.x + (2 + p.minedistcur) * x, p.y + (2 + p.minedistcur) * y, -p.xc, -p.yc, 0);
+						p.mineprog -= 10;
+						p.minedistcur++;
+						if (p.minedistcur >= p.minedist)
+							p.minedistcur -= p.minedist;
+					}
+					p.mineprog++;
+				}
+				break;
+			}
+			}
+		}
+		else
+		{
+			p.mineprog = 0;
+			p.minedistcur = 0;
+		}
+		// ########################################################################################
+
+
+		// PLACE TILES ############################################################################
+		if (right)
+		{
+			switch (p.mode)
+			{
+			case 0: // 3x1
+			{
+				if (p.inv[p.invsel]->count > 2)
+				{
+					for (int i = -1; i < 2; i++)
+						if (getTileID(p.x + i * std::abs(y) + x * 2, p.y + i * std::abs(x) + y * 2, -p.xc, -p.yc) == 0)
+						{
+							if (p.inv[p.invsel]->id != 0)
+							{
+								setTileID(p.x + i * std::abs(y) + x * 2, p.y + i * std::abs(x) + y * 2, -p.xc, -p.yc, p.inv[p.invsel]->id);
+								p.inv[p.invsel]->count--;
+								if (p.inv[p.invsel]->count == 0)
+									p.inv[p.invsel]->id = 0;
+							}
+						}
+				}
+				break;
+			}
+			case 1: // USE
+				break;
+			case 2: // 1x1
+			{
+				if (p.inv[p.invsel]->count > 0)
+				{
+					if (getTileID(p.x + x * 2, p.y + y * 2, -p.xc, -p.yc) == 0)
+					{
+						if (p.inv[p.invsel]->id != 0)
+						{
+							setTileID(p.x + x * 2, p.y + y * 2, -p.xc, -p.yc, p.inv[p.invsel]->id);
+							p.inv[p.invsel]->count--;
+							if (p.inv[p.invsel]->count == 0)
+								p.inv[p.invsel]->id = 0;
+						}
+					}
+				}
+			}
+				break;
+			}
+		}
+		// ########################################################################################
+
+
+		// SET ROTATION ###########################################################################
+		int lastrot = p.rot;
+		double deg = (std::atan2(width / 2 - mpos.x, height / 2 - mpos.y) * 180.0) / -3.1416;
+		if (deg < 0) deg += 360;
+
+		if (deg >= 360 - 45 || deg < 45) p.rot = 0;
+		if (deg >= 90 - 45 && deg < 90 + 45) p.rot = 90;
+		if (deg >= 180 - 45 && deg < 180 + 45) p.rot = 180;
+		if (deg >= 270 - 45 && deg < 270 + 45) p.rot = 270;
+
+		if (p.rot != lastrot)
+		{
+			p.minedistcur = 0;
+			p.mineprog = 0;
+		}
+		// ########################################################################################
+
+		// LIGHT PLAYER ###########################################################################
+		for (int x = -15; x < 16; x++)
+			for (int y = -15; y < 16; y++)
+				setTileLight(p.x + x, p.y + y, -p.xc, -p.yc, 0);
+
+		lightDiamond(p.x, p.y, -p.xc, -p.yc, 12);
+		// ########################################################################################
+	}	
+	else
+	{
+		p.minedistcur = 0;
+		p.mineprog = 0;
+	}
+}
+
+
+void updateKey()
+{
+	if (!e && eL)
+	{
+		ininv = !ininv;
+	}
+
+	if (one) p.invsel = 0;
+	if (two) p.invsel = 1;
+	if (thr) p.invsel = 2;
+	if (fou) p.invsel = 3;
+	if (fiv) p.invsel = 4;
+	if (six) p.invsel = 5;
+	if (sev) p.invsel = 6;
+	if (eig) p.invsel = 7;
+	if (nin) p.invsel = 8;
+
+	if (q && !qL) p.mode = (p.mode + 1) % 3;
+
+	if (r) p = Player();
+}
+
+
+void getkey()
+{
+	w = GetKeyState(0x57) < 0;
+	s = GetKeyState(0x53) < 0;
+	a = GetKeyState(0x41) < 0;
+	d = GetKeyState(0x44) < 0;
+
+	qL = q;
+	q = GetKeyState(0x51) < 0;
+	eL = e;
+	e = GetKeyState(0x45) < 0;
+	rL = r;
+	r = GetKeyState(0x52) < 0;
+	lL = l;
+	l = GetKeyState(0x4C) < 0;
+
+	zer = GetKeyState(0x30) < 0;
+	one = GetKeyState(0x31) < 0;
+	two = GetKeyState(0x32) < 0;
+	thr = GetKeyState(0x33) < 0;
+	fou = GetKeyState(0x34) < 0;
+	fiv = GetKeyState(0x35) < 0;
+	six = GetKeyState(0x36) < 0;
+	sev = GetKeyState(0x37) < 0;
+	eig = GetKeyState(0x38) < 0;
+	nin = GetKeyState(0x39) < 0;
+
+	shift = GetKeyState(0x10) < 0;
+
+	leftL = left;
+	left = GetKeyState(0x01) < 0;
+	rightL = right;
+	right = GetKeyState(0x02) < 0;
+
+	GetCursorPos(&mpos);
+	ScreenToClient(window.getSystemHandle(), &mpos);
 }
 
 
 int main()
 {
-	window.setPosition(sf::Vector2i(window.getPosition().x, 0));
+	// SETUP WINDOW ###############################################################################
 	window.setFramerateLimit(60);
+	window.setPosition(sf::Vector2i(window.getPosition().x, 0));
+	// ############################################################################################
+
+
+	// TEXTURES ###################################################################################
+	for (int i = 0; i < 256; i++)
+		tex[i] = new sf::Texture();
+	tex[0]->loadFromFile("res/blocks/air.png");
+	tex[1]->loadFromFile("res/blocks/stone.png");
+	tex[2]->loadFromFile("res/blocks/border.png");
 
 	font.loadFromFile("res/cas.ttf");
-	debug.setFont(font);
-	debug.setPosition(viewDist / 2, (viewDist + 3) * 4);
+	text.setFont(font);
+	// ############################################################################################
 
-	itemNum.setCharacterSize(10);
-	itemNum.setFont(font);
 
-	tex[0] = new sf::Texture; tex[0]->loadFromFile("res/blocks/air.png");
-	tex[1] = new sf::Texture; tex[1]->loadFromFile("res/blocks/stone.png");
-	tex[2] = new sf::Texture; tex[2]->loadFromFile("res/blocks/bricks.png");
-	tex[3] = new sf::Texture; tex[3]->loadFromFile("res/blocks/workbench.png");
-	tex[4] = new sf::Texture; tex[4]->loadFromFile("res/blocks/furnace.png");
-	tex[5] = new sf::Texture; tex[5]->loadFromFile("res/blocks/light.png");
-	tex[6] = new sf::Texture; tex[6]->loadFromFile("res/blocks/border.png");
-
-	// Set Player Inventory - Change Later
-	play.inv[1].count = 100; play.inv[1].id = 5;
-	play.inv[0].count = 100; play.inv[0].id = 2;
-	play.inv[2].count = 100; play.inv[2].id = 3;
-	play.inv[3].count = 100; play.inv[3].id = 4;
-	// ***********************************
-
-	enum blockID
+	// MENU GUI ###################################################################################
+	std::fstream pages("res/menu.mnu", std::ios::in);
+	std::string data;
+	while (std::getline(pages, data))
 	{
-		air,
-		stone,
-		bricks,
-		workBench,
-		furnace,
-		light,
-		border,
-		cobblestone,
-		water,
-		waterT,
-		waterR,
-		waterD,
-		waterL,
-		oreIron,
-		oreGold,
-		ore1,
-		ore2,
-		ore3,
-		ore4,
-	};
+		int parselen;
+		for (int i = data.size() - 1; i >= 0; i--)
+			if (data[i] == ' ')
+				data.erase(i, 1);
 
-	playTile.setSize(sf::Vector2f(play.width, play.width));
-	tile.setSize(sf::Vector2f(tileSize, tileSize));
-	invTile.setSize(sf::Vector2f(50, 50));
-	invTileItem.setSize(sf::Vector2f(32, 32));
-	minimap.setSize(sf::Vector2f(4, 4));
-	frame.setSize(sf::Vector2f(WIDTH, HEIGHT));
-	frame.setPosition(0, 0);
-
-	btnTxt.setFillColor(sf::Color(255, 255, 255));
-	btnTxt.setFont(font);
-
-
-	pages[0] = new Page;
-
-	pages[0]->btn.push_back(new Button(18, 22, 28, 9, "PLAY"));
-	pages[0]->btn.push_back(new Button(18, 33, 13, 9, "QUIT"));
-	pages[0]->btn.push_back(new Button(33, 33, 13, 9, "SETTINGS"));
-	pages[0]->btnNum = 3;
-
-	pages[0]->ttl.push_back(new Title(0, 6, 64, 8, "CAVE TEST"));
-	pages[0]->ttlNum = 1;
-
-
-	pages[1] = new Page;
-
-	pages[1]->btn.push_back(new Button(1, 41, 7, 5, "BACK"));
-	pages[1]->btn.push_back(new Button(43, 18, 8, 5, "CREATE"));
-	pages[1]->btnNum = 2;
-
-	pages[1]->lbl.push_back(new Label(10, 11, 13, 5, "WORLD NAME"));
-	pages[1]->lbl.push_back(new Label(10, 18, 13, 5, "WORLD SEED"));
-	pages[1]->lbl.push_back(new Label(10, 25, 15, 5, "MAP RADIUS X"));
-	pages[1]->lbl.push_back(new Label(10, 32, 15, 5, "MAP RADIUS Y"));
-	pages[1]->lblNum = 4;
-
-	pages[1]->tbx.push_back(new Textbox(25, 11, 26, 5));
-	pages[1]->tbx.push_back(new Textbox(25, 18, 16, 5));
-	pages[1]->tbx.push_back(new Textbox(27, 25, 10, 5));
-	pages[1]->tbx.push_back(new Textbox(27, 32, 10, 5));
-	pages[1]->tbxNum = 4;
-
-
-	pages[2] = new Page;
-
-	pages[2]->btn.push_back(new Button(1, 41, 7, 5, "BACK"));
-	pages[2]->btn.push_back(new Button(10, 41, 7, 5, "SAVE"));
-	pages[2]->btnNum = 2;
-
-	
-	pages[3] = new Page;
-
-	pages[3]->btn.push_back(new Button(1, 41, 7, 5, "BACK"));
-	pages[3]->btn.push_back(new Button(18, 5, 28, 9, "NEW WORLD"));
-
-	std::fstream manifest;
-	std::string worlds;
-	manifest.open("worlds/manifest.txt");
-	int count = 0;
-	if (manifest.is_open())
-	{
-		while (std::getline(manifest, worlds))
+		switch (data[0] + data[1] + data[2])
 		{
-			std::string name = worlds.substr(6);
-			std::string month = worlds.substr(0, 2);
-			std::string day = worlds.substr(2, 2);
-			std::string year = worlds.substr(4, 2);
-			pages[3]->btn.push_back(new Button(18, 16 + count * 11, 18, 9, "\t" + name + "\n\t" + month + "/" + day + "/" + year));
-			pages[3]->img.push_back(new Image(37, 16 + count * 11, 9, 9, "worlds/" + name));
-			count++;
+		case 'N' + 'E' + 'W':
+		{
+			Pages.push_back(new PAGE);
+			break;
+		}
+		case 'B' + 'T' + 'N':
+		{
+			int p[6];
+			std::string str;
+			data.erase(0, 3);
+			for (int i = 0; i < 6; i++)
+			{
+				parselen = data.find(',');
+				p[i] = stoi(data.substr(0, parselen));
+				data.erase(0, parselen + 1);
+			}
+			parselen = data.find('"', 1);
+			str = data.substr(1, parselen - 1);
+			data.erase(0, parselen + 1);
+
+			for (int i = 0; i < str.length(); i++)
+				if (str[i] == '_')
+					str.replace(i, 1, " ");
+			Pages[Pages.size() - 1]->btn.push_back(new BTN(p[0] * 15, p[1] * 15, p[2] * 15, p[3] * 15, p[4], p[5], str));
+			break;
+		}
+		case 'T' + 'T' + 'L':
+		{
+			int p[5];
+			std::string str;
+			data.erase(0, 3);
+			for (int i = 0; i < 5; i++)
+			{
+				parselen = data.find(',');
+				p[i] = stoi(data.substr(0, parselen));
+				data.erase(0, parselen + 1);
+			}
+			parselen = data.find('"', 1);
+			str = data.substr(1, parselen - 1);
+			data.erase(0, parselen + 1);
+
+			for (int i = 0; i < str.length(); i++)
+				if (str[i] == '_')
+					str.replace(i, 1, " ");
+			Pages[Pages.size() - 1]->ttl.push_back(new TTL(p[0] * 15, p[1] * 15, p[2] * 15, p[3] * 15, p[4], str));
+			break;
+		}
+		case 'L' + 'B' + 'L':
+		{
+			int p[5];
+			std::string str;
+			data.erase(0, 3);
+			for (int i = 0; i < 5; i++)
+			{
+				parselen = data.find(',');
+				p[i] = stoi(data.substr(0, parselen));
+				data.erase(0, parselen + 1);
+			}
+			parselen = data.find('"', 1);
+			str = data.substr(1, parselen - 1);
+			data.erase(0, parselen + 1);
+
+			for (int i = 0; i < str.length(); i++)
+				if (str[i] == '_')
+					str.replace(i, 1, " ");
+			Pages[Pages.size() - 1]->lbl.push_back(new LBL(p[0] * 15, p[1] * 15, p[2] * 15, p[3] * 15, p[4], str));
+			break;
+		}
+		case 'S' + 'L' + 'D':
+		{
+			int p[7];
+			std::string str;
+			data.erase(0, 3);
+			for (int i = 0; i < 7; i++)
+			{
+				parselen = data.find(',');
+				p[i] = stoi(data.substr(0, parselen));
+				data.erase(0, parselen + 1.0);
+			}
+			parselen = data.find('"', 1);
+			str = data.substr(1, parselen - 1.0);
+			data.erase(0, parselen + 1.0);
+
+			for (int i = 0; i < str.length(); i++)
+				if (str[i] == '_')
+					str.replace(i, 1, " ");
+			Pages[Pages.size() - 1]->sld.push_back(new SLD(p[0] * 15, p[1] * 15, p[2] * 15, p[3] * 15, p[4], p[5], p[6], str));
+			break;
+		}
 		}
 	}
+	pages.close();
+	// ############################################################################################
 
-	pages[3]->btnNum = 2 + count;
+	// LOAD SETTINGS ##############################################################################
+	std::fstream set("res/settings.txt", std::ios::in);
+	if (set.is_open())
+	{
+		while (std::getline(set, data))
+		{
+			if (data.length() > 2)
+			{
+				settings.push_back(stoi(data.substr(0, data.find(':'))));
+				settingsid.push_back(stoi(data.substr(data.find(':') + 1)));
+			}
+		}
+	}
+	set.close();
+	// ############################################################################################
 
-	pages[3]->imgNum = count;
+	for (int y = 0; y < 3; y++)
+		for (int x = 0; x < 3; x++)
+			invEle.push_back(new InvElement(2 + x * 3, 36 + y * 3, 3, 3));
+	for (int y = 0; y < 3; y++)
+		invEle.push_back(new InvElement(14, 36 + y * 3, 3, 3));
 
-	debug.setFillColor(sf::Color(255, 255, 255));
-	debug.setCharacterSize(15);
-
-	ent.push_back(Entity(zombie, 8, 8));
-
-	now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
-	last = now;
+	for (int x = 0; x < 2; x++)
+		guiEle.push_back(new InvElement(55 + x * 3, 36, 3, 9));
 
 	while (window.isOpen())
 	{
@@ -1475,46 +1446,41 @@ int main()
 		while (window.pollEvent(event))
 		{
 			if (event.type == sf::Event::Closed)
-			{
 				window.close();
-			}
-
-			if (event.type == sf::Event::TextEntered)
+			if (event.type == sf::Event::GainedFocus)
+				focus = true;
+			if (event.type == sf::Event::LostFocus)
+				focus = false;
+			if (event.type == sf::Event::Resized)
 			{
-				if (!inGame)
-				{
-					char c = static_cast<char>(event.text.unicode);
-					if (pages[pageNum]->selID != -1)
-					{
-						if (c == '\b' && pages[pageNum]->tbx[pages[pageNum]->selID]->str.length() > 0)
-							pages[pageNum]->tbx[pages[pageNum]->selID]->str.pop_back();
-						else if (c == '\r')
-							pages[pageNum]->selID = -1;
-						else if (c == '\t')
-							pages[pageNum]->selID = (pages[pageNum]->selID + 1) % pages[pageNum]->tbxNum;
-						else if (isprint(c))
-							pages[pageNum]->tbx[pages[pageNum]->selID]->str.push_back(c);
-					}
-				}
+				width = std::floor(window.getSize().x / 2) * 2;
+				height = std::floor(window.getSize().y / 2) * 2;
 			}
 		}
 
 		now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
+		if (last == 0) 
+			last = now;
 		delta += now - last;
-		if (ticks % 5 == 0) fps = 1000.0 / ((now - last));
 		last = now;
 
 		while (delta >= tps)
 		{
 			delta -= tps;
 			ticks++;
-			if (gen) tick();
+			update();
 		}
 
-		key();
+		if (ingame)
+			render();
+		else
+			rmenu();
 
-		if (inGame) render();
-		else rMenu();
+		if (focus)
+		{
+			getkey();
+			updateKey();
+		}
 	}
 
 	return 0;
