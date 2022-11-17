@@ -1,8 +1,8 @@
 # Cave-Thing
-## Now with ~1500~ 1250+ lines of code! I redid most of it
+## Now with about 1500 lines of code! I redid most of it.
 ## Basically this is a topdown Minecraft ripoff.
-### Version 0.04.01 - The Undo Update
-#### Removed world saving and block ids. I would consider it a finished update.
-##### TL;DR: Removed good features because there was a less messy way of doing them.
+#### Use WASD to move around. <br>Use Left click to destroy tiles and R
+ight click for placing tiles. <br>Use Q to cycle placing modes<br>Use E to pause (for now, also there is no reason to pause)
+### Version 0.05.00 - The GUI Update - Every part of the GUI can be customized!<br>Just edit the menu.mnu file
 
 ###### I still haven't udated the javascript version.
