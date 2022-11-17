@@ -1,0 +1,10 @@
+Green - Main Inventory - Hidden in Game
+Blue - Crafting Recipes Available - Hidden in Game
+Yellow - Hotbar - Shown in Game
+Cyan - Crafting Items Needed - Hidden in Game
+Purple - Crafting Mod - Hidden in Game
+Magenta - Player Mods - Hidden in Game
+Red - Player Health - Shown in Game
+White - Place / Destroy Mode - Shown in Game
+Light Green - Precision Mode - Shown in Game
+Light Red - Default Mode - Shown in Game
