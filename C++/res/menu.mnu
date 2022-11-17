@@ -1,0 +1,56 @@
+/// The keyword '///' is a comment and will be ignored
+/// Whitespace will be ignored
+/// To use spaces in strings use '_'
+/// The parameter after the keyword does not have a comma seperator
+
+/// The keyword 'NEW' creates a new menu page and any elements after it will be added to it
+/// The first menu page is index 0
+
+/// The keyword 'TTL' creates a new title element that displays a word
+/// Paramenters: x-position, y-position, width, height, font size, label (string)
+
+/// The keyword 'LBL' creates a new label element that looks like a button, but does nothing
+/// Paramenters: x-position, y-position, width, height, font size, label (string)
+
+/// The keyword 'SLD' creates a new slider element that slides to select stuff 					(SAVABLE)	(USER INPUT)
+/// Paramenters: x-position, y-position, width, height, font size, value, id, labels (string)
+/// Adding stops to slider example: labels: "1,a,12,a2,sus_imposter" would create 5 stops
+/// 0: tilesize
+/// 1: viewdist
+/// 2: loaddist
+
+/// The keyword 'BTN' creates a new button element that does an action when clicked 						(USER INPUT)
+/// Paramenters: x-position, y-position, width, height, font size, event, label (string)
+/// Events: 
+/// 0 - 99: GOTO Page
+/// 100: EXIT
+/// 101: CREATE WORLD
+/// 102: SAVE SETTINGS
+
+/// MAIN MENU
+NEW
+BTN 18, 22, 28, 9, 30, 1, "PLAY"
+BTN 18, 33, 13, 9, 30, 100, "QUIT"
+BTN 33, 33, 13, 9, 30, 2, "SETTINGS"
+TTL 0, 6, 64, 0, 90, "CAVE_TEST"
+
+/// CREATE WORLD
+NEW
+BTN 2, 41, 7, 5, 30, 0, "BACK"
+BTN 43, 18, 8, 5, 30, 101, "CREATE" 
+LBL 10, 11, 13, 5, 30, "WORLD NAME"
+LBL 10, 18, 13, 5, 30, "WORLD SEED"
+
+/// SETTINGS
+NEW
+BTN 2, 41, 7, 5, 30, 0, "BACK"
+BTN 11, 41, 7, 5, 30, 102, "SAVE"
+LBL 10, 11, 13, 5, 30, "VIEW_SCALE"
+LBL 10, 18, 13, 5, 30, "RENDER_DIST"
+LBL 10, 25, 13, 5, 30, "UPDATE_DIST"
+/// tilesize
+SLD 25, 11, 29, 5, 30, 8, 0, "8,12,16,20,24,28,32,36,40"
+/// viewdist
+SLD 25, 18, 29, 5, 30, 0, 1, "1,2,3,4,5,6,7"
+/// loaddist
+SLD 25, 25, 29, 5, 30, 1, 2, "2,3,4,5,6,7,8,9"
