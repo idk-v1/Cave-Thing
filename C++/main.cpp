@@ -1,7 +1,8 @@
 /*
 A shitty game that is sort of like Minecraft from a top down view, but I don't want to learn 3d maths.
 If you are reading this, good luck. This code follows the rule of "if it works, it works".
-- Ben Hamilton - Nov 17, 2022
+- Ben Hamilton - Nov 28, 2022
+Cleaned up
 */
 
 #include "SFML/Graphics.hpp"
@@ -21,7 +22,6 @@ If you are reading this, good luck. This code follows the rule of "if it works, 
 
 SimplexNoise noise;
 
-
 struct Item
 {
 	int id = 0,
@@ -33,30 +33,22 @@ struct Item
 	}
 };
 
-
 struct Tile
 {
-	char id = 0,
+	int id = 0,
 		grow = 0,
 		light = 0;
 };
 sf::Texture* tex[256];
 
-
 struct InvElement
 {
-	int x = 0,
-		y = 0,
-		w = 0,
-		h = 0,
-		id = 0,
-		count = 0;
+	int x = 0, y = 0, w = 0, h = 0,
+		id = 0, count = 0;
 	InvElement(double xp, double yp, double wp, double hp)
 	{
-		x = xp * 15;
-		y = yp * 15;
-		w = wp * 15;
-		h = hp * 15;
+		x = int(xp); y = int(yp);
+		w = int(wp); h = int(hp);
 	}
 };
 std::vector<InvElement*>invEle;
@@ -71,29 +63,13 @@ std::vector<int>settingsid;
 std::vector<int>tmpsettings;
 std::vector<int>tmpsettingsid;
 
-int width = 960,
-	height = 720,
-	mwidth = 500,
-	mheight = 500,
-
+int width = 960, height = 720, mwidth = 500, mheight = 500,
 	tps = 1000 / 20,
+	tilesize = 32, viewdist = 1, loaddist = 3,
+	pagenum = 0, invsel = -1,
+	sfx = 15, sfy = 15;
 
-	tilesize = 32,
-	viewdist = 1,
-	loaddist = 3,
-
-	pagenum = 0,
-	
-	invsel = -1;
-
-long now = 0,
-	last = 0,
-	delta = 0,
-
-	ticks = 0,
-	ticksS = 0,
-
-	seed;
+long now = 0, last = 0, delta = 0, ticks = 0, ticksS = 0, seed;
 
 bool 
 	w = false, wL = false,
@@ -119,47 +95,29 @@ bool
 	left = false, leftL = false,
 	right = false, rightL = false,
 
-	focus = true,
-	ininv = false,
-	ingame = false,
-	pause = false;
+	focus = true, ininv = false, ingame = false, pause = false;
 
-// ELEMENTS #######################################################################################
 struct BTN
 {
-	int x = 0,
-		y = 0,
-		w = 0,
-		h = 0,
-		fs = 0,
-		evt = 0;
+	int x = 0, y = 0, w = 0, h = 0,
+		fs = 0, evt = 0;
 	std::string str = "";
 	BTN(int xp, int yp, int wp, int hp, int fsp, int evtp, std::string strp)
 	{
-		x = xp;
-		y = yp;
-		w = wp;
-		h = hp;
-		fs = fsp;
-		evt = evtp;
+		x = xp; y = yp; w = wp; h = hp;
+		fs = fsp; evt = evtp; 
 		str = strp;
 	}
 };
 
 struct TTL
 {
-	int x = 0,
-		y = 0,
-		w = 0,
-		h = 0,
+	int x = 0, y = 0, w = 0, h = 0,
 		fs = 0;
 	std::string str = "";
 	TTL(int xp, int yp, int wp, int hp, int fsp, std::string strp)
 	{
-		x = xp;
-		y = yp;
-		w = wp;
-		h = hp;
+		x = xp;	y = yp;	w = wp; h = hp;
 		fs = fsp;
 		str = strp;
 	}
@@ -167,18 +125,12 @@ struct TTL
 
 struct LBL
 {
-	int x = 0,
-		y = 0,
-		w = 0,
-		h = 0,
+	int x = 0, y = 0, w = 0, h = 0,
 		fs = 0;
 	std::string str = "";
 	LBL(int xp, int yp, int wp, int hp, int fsp, std::string strp)
 	{
-		x = xp;
-		y = yp;
-		w = wp;
-		h = hp;
+		x = xp; y = yp; w = wp; h = hp;
 		fs = fsp;
 		str = strp;
 	}
@@ -186,23 +138,15 @@ struct LBL
 
 struct SLD
 {
-	int x = 0,
-		y = 0,
-		w = 0,
-		h = 0,
+	int x = 0, y = 0, w = 0, h = 0,
 		fs = 0,
 		val = 0,
 		id = 0;
 	std::string str = "";
 	SLD(int xp, int yp, int wp, int hp, int fsp, int valp, int idp, std::string strp)
 	{
-		x = xp;
-		y = yp;
-		w = wp;
-		h = hp;
-		fs = fsp;
-		val = valp;
-		id = idp;
+		x = xp; y = yp; w = wp; h = hp;
+		fs = fsp; val = valp; id = idp;
 		str = strp;
 	}
 };
@@ -219,19 +163,16 @@ struct PAGE
 	int sel = 0;
 };
 std::vector<PAGE*>Pages;
-// ################################################################################################
 
 
 struct Chunk
 {
-	int x = 0,
-		y = 0;
+	int x = 0, y = 0;
 	Tile** tiles[16];
 	Tile** tilesf[16];
 	Chunk(int xp, int yp)
 	{
-		x = xp;
-		y = yp;
+		x = xp; y = yp;
 
 		for (int x = 0; x < 16; x++)
 		{
@@ -250,40 +191,25 @@ std::vector<Chunk*> chunks;
 
 struct Player
 {
-	int x = 0,
-		y = 0,
-		xv = 0,
-		yv = 0,
-		xc = 0,
-		yc = 0,
-		rad = tilesize * 3,
-		rot = 0,
+	int x = 0, y = 0,
+		xc = 0, yc = 0,
+		xv = 0, yv = 0,
+		rad = tilesize * 3, rot = 0,
 		mode = 0,
-		anprog = 0,
-		mineprog = 0,
-		minedist = 5,
-		minedistcur = 0,
-		minespeed = 1,
-		invsel = 0,
-		health = 50,
-		energy = 50,
-		enrch = 0,
-		damage = 10,
-		speed = 1;
+		mineprog = 0, minedist = 5, minedistcur = 0, minespeed = 1,
+		invsel = 0, health = 50, energy = 50, enrch = 0, damage = 10, speed = 1;
 	bool light = true;
 	Item* inv[72];
 	Player()
 	{
 		for (int i = 0; i < 72; i++)
-		{
 			inv[i] = new Item(0, 0);
-		}
 	}
 };
 Player p;
 
 
-sf::RenderWindow window(sf::VideoMode(width, height), "Cave", sf::Style::Titlebar | sf::Style::Close);
+sf::RenderWindow window(sf::VideoMode(width, height), "Cave");
 sf::RectangleShape rect;
 sf::ConvexShape cnvx;
 sf::Texture texture;
@@ -291,301 +217,38 @@ sf::Font font;
 sf::Text text;
 
 
-void save()
-{
-
-}
-
-
-void load()
-{
-
-}
-
-
-void addInv(int id)
-{
-	bool found = false;
-	if (id != 0)
-	{
-		for (int i = 0; i < 72; i++)
-		{
-			if (p.inv[i]->id == id && p.inv[i]->count < 450 && !found)
-			{
-				p.inv[i]->count++;
-				found = true;
-			}
-		}
-		if (!found)
-		{
-			for (int i = 0; i < 72; i++)
-			{
-				if (p.inv[i]->id == 0 && !found)
-				{
-					p.inv[i]->id = id;
-					p.inv[i]->count++;
-					found = true;
-				}
-			}
-		}
-	}
-}
-
-
-int getChunkID(int x, int y, int xc, int yc)
-{
-	int xx = xc;
-	int yy = yc;
-	if (x < 0) xx--;
-	if (x >= 16) xx++;
-	if (y < 0) yy--;
-	if (y >= 16) yy++;
-
-	for (int i = 0; i < chunks.size(); i++)
-		if (chunks[i]->x == xx && chunks[i]->y == yy)
-			return i;
-	return -1;
-}
-
-
-int getTileID(int x, int y, int xc, int yc)
-{
-	int xx = x;
-	int yy = y;
-	int i = getChunkID(x, y, xc, yc);
-	if (i != -1)
-	{
-		if (x < 0) xx += 16;
-		if (x >= 16) xx -= 16;
-		if (y < 0) yy += 16;
-		if (y >= 16) yy -= 16;
-		return chunks[i]->tiles[xx][yy]->id;
-	}
-	return -1;
-}
-
-
-void setTileID(int x, int y, int xc, int yc, int id)
-{
-	int xx = x;
-	int yy = y;
-	int i = getChunkID(x, y, xc, yc);
-	if (i != -1)
-	{
-		if (x < 0) xx += 16;
-		if (x >= 16) xx -= 16;
-		if (y < 0) yy += 16;
-		if (y >= 16) yy -= 16;
-		chunks[i]->tiles[xx][yy]->id = id;
-	}
-}
-
-
-int getTileLight(int x, int y, int xc, int yc)
-{
-	int xx = x;
-	int yy = y;
-	int i = getChunkID(x, y, xc, yc);
-	if (i != -1)
-	{
-		if (x < 0) xx += 16;
-		if (x >= 16) xx -= 16;
-		if (y < 0) yy += 16;
-		if (y >= 16) yy -= 16;
-		return chunks[i]->tiles[xx][yy]->light;
-	}
-	return -1;
-}
-
-
-void setTileLight(int x, int y, int xc, int yc, int light)
-{
-	int xx = x;
-	int yy = y;
-	int i = getChunkID(x, y, xc, yc);
-	if (i != -1)
-	{
-		if (x < 0) xx += 16;
-		if (x >= 16) xx -= 16;
-		if (y < 0) yy += 16;
-		if (y >= 16) yy -= 16;
-		chunks[i]->tiles[xx][yy]->light = light;
-	}
-}
-
-
-void lightDiamond(int x, int y, int xc, int yc, int light)
-{
-	if (light > 0)
-	{
-		if (getTileLight(x, y - 1, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
-		{
-			setTileLight(x, y - 1, xc, yc, light);
-			lightDiamond(x, y - 1, xc, yc, light - 1);
-		}
-
-		if (getTileLight(x + 1, y, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
-		{
-			setTileLight(x + 1, y, xc, yc, light);
-			lightDiamond(x + 1, y, xc, yc, light - 1);
-		}
-
-		if (getTileLight(x, y + 1, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
-		{
-			setTileLight(x, y + 1, xc, yc, light);
-			lightDiamond(x, y + 1, xc, yc, light - 1);
-		}
-
-		if (getTileLight(x - 1, y, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
-		{
-			setTileLight(x - 1, y, xc, yc, light);
-			lightDiamond(x - 1, y, xc, yc, light - 1);
-		}
-	}
-}
-
-
-void generate(int xc, int yc)
-{
-	double noiseX, noiseY, noiseLvl;
-	Chunk* c = new Chunk(xc, yc);
-
-	for (int x = 0; x < 16; x++)
-		for (int y = 0; y < 16; y++)
-		{
-			noiseX = (xc * 16.0 + x) * 0.015625;
-			noiseY = (yc * 16.0 + y) * 0.015625;
-			noiseLvl = noise.unsignedFBM(noiseX, noiseY, 3, 2.5, 0.3) + 0.625;
-			c->tiles[x][y]->id = int(noiseLvl);
-
-			c->tilesf[x][y]->id = 1;
-		}
-	chunks.push_back(c);
-}
-
-
-void initGen()
-{
-	for (int x = p.xc - loaddist; x < p.xc + loaddist + 1; x++)
-		for (int y = p.yc - loaddist; y < p.yc + loaddist + 1; y++)
-		{
-			int i = getChunkID(0, 0, -x, -y);
-			if (i == -1)
-				generate(-x, -y);
-		}
-	for (int x = -1; x < 2; x++)
-		for (int y = -1; y < 2; y++)
-			setTileID(p.x + x, p.y + y, -p.xc, -p.yc, 0);
-}
+void save();
+void load();
+void addInv(int);
+int getChunkID(int, int, int, int);
+int getTileID(int, int, int, int);
+void setTileID(int, int, int, int, int);
+int getTileLight(int, int, int, int);
+void setTileLight(int, int, int, int, int);
+void lightDiamond(int, int, int, int, int);
+void generate(int, int);
+void initGen();
+void renderTiles();
+void renderPlayer();
+void loadGUI();
+void getkey();
+void updateKey();
+void render();
+void rmenu();
+void update();
 
 
 void render()
 {
-	int i, xpos, ypos, id, idf;
-	double light;
 	window.clear();
 
+#pragma warning(disable:4244)
 	rect.setSize(sf::Vector2f(tilesize, tilesize));
 	rect.setOutlineThickness(0);
+	renderTiles();
 
-	// Get all chunks in view distance
-	for (int cx = p.xc - viewdist; cx < p.xc + viewdist + 1; cx++)
-		for (int cy = p.yc - viewdist; cy < p.yc + viewdist + 1; cy++)
-		{
-			// If chunk exists, draw it
-			i = getChunkID(0, 0, -cx, -cy);
-			if (i != -1)
-			{
-				// Draw all tiles in chunk
-				for (int x = 0; x < 16; x++)
-					for (int y = 0; y < 16; y++)
-					{
-						xpos = width / 2.0 + (chunks[i]->x * 16.0 + x + p.xc * 16.0 - p.x) * tilesize - tilesize / 2.0;
-						ypos = height / 2.0 + (chunks[i]->y * 16.0 + y + p.yc * 16.0 - p.y) * tilesize - tilesize / 2.0;
-						rect.setPosition(xpos, ypos);
+	renderPlayer();
 
-						light = (getTileLight(x, y, -cx, -cy) + 4.0) / 16.0;
-						if (light < 0.25) light = 0.25;
-						//int r = std::hash<time_t>{}(x * 3.0 / y - cx * 16.0 + y * 5.0 - cy * 16.0 / x * cy) % 4;
-
-						// Get id of tile, then set fill color
-						rect.setFillColor(sf::Color(255 * light, 255 * light, 255 * light));
-						id = chunks[i]->tiles[x][y]->id;
-						switch (id)
-						{
-						case 0:
-							idf = chunks[i]->tilesf[x][y]->id;
-							rect.setFillColor(sf::Color(160 * light, 160 * light, 160 * light));
-							rect.setTexture(tex[idf]);
-							break;
-						default:
-							rect.setTexture(tex[id]);
-						}
-						window.draw(rect);
-					}
-			}
-		}
-
-	// Draws Mining Animation
-	if (p.mineprog > 0)
-	{
-		int xpos = width / 2 - p.rad / 2 + tilesize;
-		int ypos = height / 2 - p.rad / 2 + tilesize;
-		rect.setTexture(tex[2]);
-		rect.setFillColor(sf::Color(255 * (p.mineprog * 0.066 + 0.33), 255 * (p.mineprog * 0.066 + 0.33), 255 * (p.mineprog * 0.066 + 0.33), 128));
-
-		cnvx.setFillColor(sf::Color(255 * (p.mineprog * 0.066 + 0.33), 0, 0, 128));
-		cnvx.setPointCount(3);
-		cnvx.setPoint(0, sf::Vector2f(width / 2, height / 2));
-		cnvx.setPoint(1, sf::Vector2f(width / 2, height / 2));
-		cnvx.setPoint(2, sf::Vector2f(width / 2, height / 2));
-
-		switch (p.rot)
-		{
-		case 0:
-			rect.setPosition(xpos - tilesize, ypos - tilesize * (2 + p.minedistcur));
-			rect.setSize(sf::Vector2f(p.rad, tilesize));
-			window.draw(rect);
-
-			cnvx.setPoint(1, sf::Vector2f(width / 2 - p.rad / 2, height / 2 - (p.rad / 2 + tilesize * p.minedistcur)));
-			cnvx.setPoint(2, sf::Vector2f(width / 2 + p.rad / 2, height / 2 - (p.rad / 2 + tilesize * p.minedistcur)));
-			break;
-		case 90:
-			rect.setPosition(xpos + tilesize * (2 + p.minedistcur), ypos - tilesize);
-			rect.setSize(sf::Vector2f(tilesize, p.rad));
-			window.draw(rect);
-
-			cnvx.setPoint(1, sf::Vector2f(width / 2 + (p.rad / 2 + tilesize * p.minedistcur), height / 2 - p.rad / 2));
-			cnvx.setPoint(2, sf::Vector2f(width / 2 + (p.rad / 2 + tilesize * p.minedistcur), height / 2 + p.rad / 2));
-			break;
-		case 180:
-			rect.setPosition(xpos - tilesize, ypos + tilesize * (2 + p.minedistcur));
-			rect.setSize(sf::Vector2f(p.rad, tilesize));
-			window.draw(rect);
-
-			cnvx.setPoint(1, sf::Vector2f(width / 2 - p.rad / 2, height / 2 + (p.rad / 2 + tilesize * p.minedistcur)));
-			cnvx.setPoint(2, sf::Vector2f(width / 2 + p.rad / 2, height / 2 + (p.rad / 2 + tilesize * p.minedistcur)));
-			break;
-		case 270:
-			rect.setPosition(xpos - tilesize * (2 + p.minedistcur), ypos - tilesize);
-			rect.setSize(sf::Vector2f(tilesize, p.rad));
-			window.draw(rect);
-
-			cnvx.setPoint(1, sf::Vector2f(width / 2 - (p.rad / 2 + tilesize * p.minedistcur), height / 2 - p.rad / 2));
-			cnvx.setPoint(2, sf::Vector2f(width / 2 - (p.rad / 2 + tilesize * p.minedistcur), height / 2 + p.rad / 2));
-			break;
-		}
-
-		window.draw(cnvx);
-	}
-
-	rect.setFillColor(sf::Color(255, 255, 255));
-	rect.setTexture(tex[2]);
-	rect.setPosition(width / 2 - p.rad / 2, height / 2 - p.rad / 2);
-	rect.setSize(sf::Vector2f(p.rad, p.rad));
-	window.draw(rect);
-
-	// Draws Inventory
 	if (ininv)
 	{
 		rect.setFillColor(sf::Color(0, 0, 0, 128));
@@ -595,7 +258,6 @@ void render()
 		window.draw(rect);
 	}
 
-	// Draw GUI
 	for (int i = 0; i < invEle.size(); i++)
 	{
 		rect.setTexture(tex[0]);
@@ -603,13 +265,13 @@ void render()
 		{
 			if (p.invsel == i || p.mode + 9 == i)
 			{
-				rect.setSize(sf::Vector2f(invEle[i]->w + 10, invEle[i]->h + 10));
-				rect.setPosition(invEle[i]->x - 5, invEle[i]->y - 5);
+				rect.setSize(sf::Vector2f(invEle[i]->w * sfy + sfy * 0.66, invEle[i]->h * sfy + sfy * 0.66));
+				rect.setPosition(invEle[i]->x * sfy - sfy * 0.33, invEle[i]->y * sfy - sfy * 0.33);
 			}
 			else
 			{
-				rect.setSize(sf::Vector2f(invEle[i]->w, invEle[i]->h));
-				rect.setPosition(invEle[i]->x, invEle[i]->y);
+				rect.setSize(sf::Vector2f(invEle[i]->w * sfy, invEle[i]->h * sfy));
+				rect.setPosition(invEle[i]->x * sfy, invEle[i]->y * sfy);
 			}
 			rect.setFillColor(sf::Color(128, 128, 128));
 			window.draw(rect);
@@ -617,13 +279,13 @@ void render()
 			rect.setFillColor(sf::Color(64, 64, 64));
 			if (p.invsel == i)
 			{
-				rect.setSize(sf::Vector2f(invEle[i]->w, invEle[i]->h));
-				rect.setPosition(invEle[i]->x, invEle[i]->y);
+				rect.setSize(sf::Vector2f(invEle[i]->w * sfy, invEle[i]->h * sfy));
+				rect.setPosition(invEle[i]->x * sfy, invEle[i]->y * sfy);
 			}
 			else
 			{
-				rect.setSize(sf::Vector2f(invEle[i]->w - 10, invEle[i]->h - 10));
-				rect.setPosition(invEle[i]->x + 5, invEle[i]->y + 5);
+				rect.setSize(sf::Vector2f(invEle[i]->w * sfy - sfy * 0.66, invEle[i]->h * sfy - sfy * 0.66));
+				rect.setPosition(invEle[i]->x * sfy + sfy * 0.33, invEle[i]->y * sfy + sfy * 0.33);
 			}
 			window.draw(rect);
 
@@ -633,7 +295,7 @@ void render()
 				rect.setTexture(tex[p.inv[i]->id]);
 				rect.setFillColor(sf::Color(255, 255, 255));
 				window.draw(rect);
-				text.setPosition(invEle[i]->x + 5, invEle[i]->y + 5);
+				text.setPosition(invEle[i]->x * sfy + sfy * 0.33, invEle[i]->y * sfy + sfy * 0.33);
 				text.setString(std::to_string(p.inv[i]->count));
 				text.setCharacterSize(10);
 				text.setFillColor(sf::Color(255, 255, 255));
@@ -645,13 +307,13 @@ void render()
 	for (int i = 0; i < guiEle.size(); i++)
 	{
 		rect.setFillColor(sf::Color(128, 128, 128));
-		rect.setSize(sf::Vector2f(guiEle[i]->w, guiEle[i]->h));
-		rect.setPosition(guiEle[i]->x, guiEle[i]->y);
+		rect.setSize(sf::Vector2f(guiEle[i]->w * sfy, guiEle[i]->h * sfy));
+		rect.setPosition(guiEle[i]->x * sfx, guiEle[i]->y * sfy);
 		window.draw(rect);
 
 		rect.setFillColor(sf::Color(64, 64, 64));
-		rect.setSize(sf::Vector2f(guiEle[i]->w - 10, guiEle[i]->h - 10));
-		rect.setPosition(guiEle[i]->x + 5, guiEle[i]->y + 5);
+		rect.setSize(sf::Vector2f(guiEle[i]->w * sfy - sfy * 0.66, guiEle[i]->h * sfy - sfy * 0.66));
+		rect.setPosition(guiEle[i]->x * sfx + sfy * 0.33, guiEle[i]->y * sfy + sfy * 0.33);
 		window.draw(rect);
 
 		if (i == 0)
@@ -672,13 +334,13 @@ void render()
 
 void rmenu()
 {
-	// FILL BACKGROUND ############################################################################
+#pragma warning (push)
+#pragma warning (disable:4267)
 	rect.setFillColor(sf::Color(0, 0, 0, 32));
 	rect.setOutlineColor(sf::Color(0, 0, 0, 0));
 	rect.setPosition(0, 0);
 	rect.setSize(sf::Vector2f(width, height));
 	window.draw(rect);
-	// ############################################################################################
 
 	if (Pages.size() > 0)
 	{
@@ -686,17 +348,21 @@ void rmenu()
 		for (int i = 0; i < Pages[pagenum]->btn.size(); i++)
 		{
 			BTN btn = *Pages[pagenum]->btn[i];
+			btn.x *= sfx;
+			btn.y *= sfy;
+			btn.w *= sfx;
+			btn.h *= sfy;
 
-			btn.y += std::sin(ticks / 10.0) * 10 - 5;
+			btn.y += std::sin(ticks / 10.0) * sfy * 0.66 - sfy * 0.33;
 
 			if (mpos.x >= btn.x && mpos.x <= btn.x + btn.w && mpos.y >= btn.y && mpos.y <= btn.y + btn.h)
 			{
 				rect.setFillColor(sf::Color(224, 32, 32));
 				rect.setOutlineColor(sf::Color(255, 64, 64));
 				text.setFillColor(sf::Color(255, 64, 64));
-				btn.x -= 5; btn.y -= 5;
-				btn.w += 10; btn.h += 10;
-				btn.fs += 5;
+				btn.x -= sfx * 0.33; btn.y -= sfy * 0.33;
+				btn.w += sfx * 0.66; btn.h += sfy * 0.66;
+				btn.fs += sfx * 0.33;
 
 				// BUTTON EVENTS ##################################################################
 				if (!left && leftL)
@@ -732,7 +398,7 @@ void rmenu()
 											if (parselen != std::string::npos)
 											{
 												stop.push_back(sld.str.substr(0, parselen));
-												sld.str.erase(0, parselen + 1);
+												sld.str.erase(0, (double)parselen + 1);
 											}
 										}
 										stop.push_back(sld.str);
@@ -814,8 +480,12 @@ void rmenu()
 		for (int i = 0; i < Pages[pagenum]->ttl.size(); i++)
 		{
 			TTL ttl = *Pages[pagenum]->ttl[i];
+			ttl.x *= sfx;
+			ttl.y *= sfy;
+			ttl.w *= sfx;
+			ttl.h *= sfy;
 
-			ttl.y += std::sin(ticks / 10.0) * 10 - 5;
+			ttl.y += std::sin(ticks / 10.0) * sfy * 0.66 - sfy * 0.33;
 
 			rect.setSize(sf::Vector2f(ttl.w, ttl.h));
 			rect.setPosition(ttl.x, ttl.y);
@@ -833,8 +503,12 @@ void rmenu()
 		for (int i = 0; i < Pages[pagenum]->lbl.size(); i++)
 		{
 			LBL lbl = *Pages[pagenum]->lbl[i];
+			lbl.x *= sfx;
+			lbl.y *= sfy;
+			lbl.w *= sfx;
+			lbl.h *= sfy;
 
-			lbl.y += std::sin(ticks / 10.0) * 10 - 5;
+			lbl.y += std::sin(ticks / 10.0) * sfy * 0.66 - sfy * 0.33;
 
 			rect.setSize(sf::Vector2f(lbl.w, lbl.h));
 			rect.setPosition(lbl.x, lbl.y);
@@ -855,6 +529,11 @@ void rmenu()
 		for (int i = 0; i < Pages[pagenum]->sld.size(); i++)
 		{
 			SLD sld = *Pages[pagenum]->sld[i];
+			sld.x *= sfx;
+			sld.y *= sfy;
+			sld.w *= sfx;
+			sld.h *= sfy;
+
 			int index = -1;
 			for (int s = 0; s < tmpsettingsid.size(); s++)
 				if (tmpsettingsid[s] == sld.id)
@@ -877,23 +556,27 @@ void rmenu()
 				if (parselen != std::string::npos)
 				{
 					stop.push_back(sld.str.substr(0, parselen));
-					sld.str.erase(0, parselen + 1);
+					sld.str.erase(0, (double)parselen + 1);
 				}
 			}
 			stop.push_back(sld.str);
 
-			sld.y += std::sin(ticks / 10.0) * 10 - 5;
+			sld.y += std::sin(ticks / 10.0) * sfy * 0.66 - sfy * 0.33;
 
 			rect.setFillColor(sf::Color(128, 128, 128));
 			rect.setOutlineColor(sf::Color(160, 160, 160));
-			rect.setSize(sf::Vector2f(sld.w, sld.h - 30));
-			rect.setPosition(sld.x, sld.y + 15);
+			rect.setSize(sf::Vector2f(sld.w, sld.h - sfy * 2));
+			rect.setPosition(sld.x, sld.y + sfy);
 			window.draw(rect);
 
-			if (mpos.x >= sld.x && mpos.x <= sld.x + sld.w && mpos.y >= sld.y && mpos.y <= sld.y + sld.h)
+			if (mpos.x >= sld.x + (double)sld.val * (1.0 / (stops - 1)) * sld.w - sfx * 2 && mpos.x <= sld.x + (double)sld.val * (1.0 / (stops - 1)) * sld.w - sfx * 2 + sfx * 4 && mpos.y >= sld.y && mpos.y <= sld.y + sld.h)
 			{
 				rect.setFillColor(sf::Color(224, 32, 32));
 				rect.setOutlineColor(sf::Color(255, 64, 64));
+			}
+
+			if (mpos.x >= sld.x && mpos.x <= sld.x + sld.w && mpos.y >= sld.y && mpos.y <= sld.y + sld.h)
+			{
 				if (left)
 				{
 					sld.val = std::min(int(mpos.x - sld.x) / (sld.w / stops), stops - 1);
@@ -920,8 +603,8 @@ void rmenu()
 				rect.setOutlineColor(sf::Color(160, 160, 160));
 			}
 
-			rect.setSize(sf::Vector2f(64, sld.h));
-			rect.setPosition(sld.x + sld.val * (sld.w / stops), sld.y);
+			rect.setSize(sf::Vector2f(sfx * 4, sld.h));
+			rect.setPosition(sld.x + (double)sld.val * (1.0 / (stops - 1)) * sld.w - sfx * 2, sld.y);
 			window.draw(rect);
 
 			text.setFillColor(sf::Color(160, 160, 160));
@@ -935,6 +618,7 @@ void rmenu()
 	}
 
 	window.display();
+#pragma warning (pop)
 }
 
 
@@ -973,7 +657,7 @@ void update()
 
 		if (shift && p.energy > 0)
 		{
-			speed += 2;
+			speed += 1;
 			mines += 2;
 		}
 
@@ -989,7 +673,7 @@ void update()
 					p.y--;
 					if (shift)
 					{
-						p.energy -= 0.1;
+						p.energy -= 0.01;
 						p.enrch = 10;
 					}
 				}
@@ -1226,6 +910,357 @@ void update()
 	}
 }
 
+// NEW TOP ##########################################################################################
+
+int main()
+{
+	window.setFramerateLimit(60);
+	window.setPosition(sf::Vector2i(window.getPosition().x, 0));
+
+	for (int i = 0; i < 256; i++)
+		tex[i] = new sf::Texture();
+	tex[0]->loadFromFile("res/blocks/air.png");
+	tex[1]->loadFromFile("res/blocks/stone.png");
+	tex[2]->loadFromFile("res/blocks/border.png");
+
+	font.loadFromFile("res/cas.ttf");
+	text.setFont(font);
+
+	loadGUI();
+
+	while (window.isOpen())
+	{
+		sf::Event event;
+		while (window.pollEvent(event))
+		{
+			if (event.type == sf::Event::Closed)
+				window.close();
+			if (event.type == sf::Event::GainedFocus)
+				focus = true;
+			if (event.type == sf::Event::LostFocus)
+				focus = false;
+			if (event.type == sf::Event::Resized)
+			{
+				sf::FloatRect view(0, 0, event.size.width, event.size.height);
+				window.setView(sf::View(view));
+				width = std::floor(event.size.width / 2) * 2;
+				height = std::floor(event.size.height / 2) * 2;
+				sfx = width / 64; sfy = height / 48;
+			}
+		}
+
+		now = std::chrono::time_point_cast<
+			std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
+		if (last == 0) 
+			last = now;
+		delta += now - last;
+		last = now;
+
+		while (delta >= tps)
+		{
+			delta -= tps;
+			ticks++;
+			update();
+		}
+
+		if (ingame)
+			render();
+		else
+			rmenu();
+
+		if (focus)
+		{
+			getkey();
+			updateKey();
+		}
+	}
+
+	return 0;
+}
+
+
+void save()
+{
+
+}
+
+
+void load()
+{
+
+}
+
+
+void addInv(int id)
+{
+	bool found = false;
+	if (id != 0)
+	{
+		for (int i = 0; i < 72; i++)
+		{
+			if (p.inv[i]->id == id && p.inv[i]->count < 450 && !found)
+			{
+				p.inv[i]->count++;
+				found = true;
+			}
+		}
+		if (!found)
+		{
+			for (int i = 0; i < 72; i++)
+			{
+				if (p.inv[i]->id == 0 && !found)
+				{
+					p.inv[i]->id = id;
+					p.inv[i]->count++;
+					found = true;
+				}
+			}
+		}
+	}
+}
+
+
+int getChunkID(int x, int y, int xc, int yc)
+{
+	int xx = xc;
+	int yy = yc;
+	if (x < 0) xx--;
+	if (x >= 16) xx++;
+	if (y < 0) yy--;
+	if (y >= 16) yy++;
+
+	for (int i = 0; i < chunks.size(); i++)
+		if (chunks[i]->x == xx && chunks[i]->y == yy)
+			return i;
+	return -1;
+}
+
+
+int getTileID(int x, int y, int xc, int yc)
+{
+	int xx = x;
+	int yy = y;
+	int i = getChunkID(x, y, xc, yc);
+	if (i != -1)
+	{
+		if (x < 0) xx += 16;
+		if (x >= 16) xx -= 16;
+		if (y < 0) yy += 16;
+		if (y >= 16) yy -= 16;
+		return chunks[i]->tiles[xx][yy]->id;
+	}
+	return -1;
+}
+
+
+void setTileID(int x, int y, int xc, int yc, int id)
+{
+	int xx = x;
+	int yy = y;
+	int i = getChunkID(x, y, xc, yc);
+	if (i != -1)
+	{
+		if (x < 0) xx += 16;
+		if (x >= 16) xx -= 16;
+		if (y < 0) yy += 16;
+		if (y >= 16) yy -= 16;
+		chunks[i]->tiles[xx][yy]->id = id;
+	}
+}
+
+
+int getTileLight(int x, int y, int xc, int yc)
+{
+	int xx = x;
+	int yy = y;
+	int i = getChunkID(x, y, xc, yc);
+	if (i != -1)
+	{
+		if (x < 0) xx += 16;
+		if (x >= 16) xx -= 16;
+		if (y < 0) yy += 16;
+		if (y >= 16) yy -= 16;
+		return chunks[i]->tiles[xx][yy]->light;
+	}
+	return -1;
+}
+
+
+void setTileLight(int x, int y, int xc, int yc, int light)
+{
+	int xx = x;
+	int yy = y;
+	int i = getChunkID(x, y, xc, yc);
+	if (i != -1)
+	{
+		if (x < 0) xx += 16;
+		if (x >= 16) xx -= 16;
+		if (y < 0) yy += 16;
+		if (y >= 16) yy -= 16;
+		chunks[i]->tiles[xx][yy]->light = light;
+	}
+}
+
+
+void lightDiamond(int x, int y, int xc, int yc, int light)
+{
+	if (light > 0)
+	{
+		if (getTileLight(x, y - 1, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
+		{
+			setTileLight(x, y - 1, xc, yc, light);
+			lightDiamond(x, y - 1, xc, yc, light - 1);
+		}
+		if (getTileLight(x + 1, y, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
+		{
+			setTileLight(x + 1, y, xc, yc, light);
+			lightDiamond(x + 1, y, xc, yc, light - 1);
+		}
+		if (getTileLight(x, y + 1, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
+		{
+			setTileLight(x, y + 1, xc, yc, light);
+			lightDiamond(x, y + 1, xc, yc, light - 1);
+		}
+		if (getTileLight(x - 1, y, xc, yc) < light && getTileID(x, y, xc, yc) == 0)
+		{
+			setTileLight(x - 1, y, xc, yc, light);
+			lightDiamond(x - 1, y, xc, yc, light - 1);
+		}
+	}
+}
+
+
+void generate(int xc, int yc)
+{
+	double noiseX, noiseY, noiseLvl;
+	Chunk* c = new Chunk(xc, yc);
+
+	for (int x = 0; x < 16; x++)
+		for (int y = 0; y < 16; y++)
+		{
+			noiseX = (xc * 16.0 + x) * 0.015625;
+			noiseY = (yc * 16.0 + y) * 0.015625;
+			noiseLvl = noise.unsignedFBM(noiseX, noiseY, 3, 2.5, 0.3) + 0.625;
+			c->tiles[x][y]->id = int(noiseLvl);
+
+			c->tilesf[x][y]->id = 1;
+		}
+	chunks.push_back(c);
+}
+
+
+void initGen()
+{
+	for (int x = p.xc - loaddist; x < p.xc + loaddist + 1; x++)
+		for (int y = p.yc - loaddist; y < p.yc + loaddist + 1; y++)
+		{
+			int i = getChunkID(0, 0, -x, -y);
+			if (i == -1)
+				generate(-x, -y);
+		}
+	for (int x = -1; x < 2; x++)
+		for (int y = -1; y < 2; y++)
+			setTileID(p.x + x, p.y + y, -p.xc, -p.yc, 0);
+}
+
+
+void renderPlayer()
+{
+	int xpos, ypos;
+	if (p.mineprog > 0)
+	{
+		xpos = width / 2 - p.rad / 2 + tilesize;
+		ypos = height / 2 - p.rad / 2 + tilesize;
+		rect.setTexture(tex[2]);
+		rect.setFillColor(sf::Color(255 * (p.mineprog * 0.066 + 0.33), 255 * (p.mineprog * 0.066 + 0.33), 255 * (p.mineprog * 0.066 + 0.33), 128));
+
+		cnvx.setFillColor(sf::Color(255 * (p.mineprog * 0.066 + 0.33), 0, 0, 128));
+		cnvx.setPointCount(3);
+		cnvx.setPoint(0, sf::Vector2f(width / 2, height / 2));
+		cnvx.setPoint(1, sf::Vector2f(width / 2, height / 2));
+		cnvx.setPoint(2, sf::Vector2f(width / 2, height / 2));
+
+		switch (p.rot)
+		{
+		case 0:
+			rect.setPosition(xpos - tilesize, ypos - tilesize * (2 + p.minedistcur));
+			rect.setSize(sf::Vector2f(p.rad, tilesize));
+			window.draw(rect);
+
+			cnvx.setPoint(1, sf::Vector2f(width / 2 - p.rad / 2, height / 2 - (p.rad / 2 + tilesize * p.minedistcur)));
+			cnvx.setPoint(2, sf::Vector2f(width / 2 + p.rad / 2, height / 2 - (p.rad / 2 + tilesize * p.minedistcur)));
+			break;
+		case 90:
+			rect.setPosition(xpos + tilesize * (2 + p.minedistcur), ypos - tilesize);
+			rect.setSize(sf::Vector2f(tilesize, p.rad));
+			window.draw(rect);
+
+			cnvx.setPoint(1, sf::Vector2f(width / 2 + (p.rad / 2 + tilesize * p.minedistcur), height / 2 - p.rad / 2));
+			cnvx.setPoint(2, sf::Vector2f(width / 2 + (p.rad / 2 + tilesize * p.minedistcur), height / 2 + p.rad / 2));
+			break;
+		case 180:
+			rect.setPosition(xpos - tilesize, ypos + tilesize * (2 + p.minedistcur));
+			rect.setSize(sf::Vector2f(p.rad, tilesize));
+			window.draw(rect);
+
+			cnvx.setPoint(1, sf::Vector2f(width / 2 - p.rad / 2, height / 2 + (p.rad / 2 + tilesize * p.minedistcur)));
+			cnvx.setPoint(2, sf::Vector2f(width / 2 + p.rad / 2, height / 2 + (p.rad / 2 + tilesize * p.minedistcur)));
+			break;
+		case 270:
+			rect.setPosition(xpos - tilesize * (2 + p.minedistcur), ypos - tilesize);
+			rect.setSize(sf::Vector2f(tilesize, p.rad));
+			window.draw(rect);
+
+			cnvx.setPoint(1, sf::Vector2f(width / 2 - (p.rad / 2 + tilesize * p.minedistcur), height / 2 - p.rad / 2));
+			cnvx.setPoint(2, sf::Vector2f(width / 2 - (p.rad / 2 + tilesize * p.minedistcur), height / 2 + p.rad / 2));
+			break;
+		}
+
+		window.draw(cnvx);
+	}
+
+	rect.setFillColor(sf::Color(255, 255, 255));
+	rect.setTexture(tex[2]);
+	rect.setPosition((float)width / 2 - p.rad / 2.0, (float)height / 2 - p.rad / 2.0);
+	rect.setSize(sf::Vector2f(p.rad, p.rad));
+	window.draw(rect);
+}
+
+
+void renderTiles()
+{
+	int index, xpos, ypos, light;
+	for (int cx = p.xc - viewdist; cx < p.xc + viewdist + 1; cx++)
+		for (int cy = p.yc - viewdist; cy < p.yc + viewdist + 1; cy++)
+		{
+			index = getChunkID(0, 0, -cx, -cy);
+			if (index != -1)
+			{
+				for (int x = 0; x < 16; x++)
+					for (int y = 0; y < 16; y++)
+					{
+						xpos = width / 2.0 + (chunks[index]->x * 16.0 + x + p.xc * 16.0 - p.x) * tilesize - tilesize / 2.0;
+						ypos = height / 2.0 + (chunks[index]->y * 16.0 + y + p.yc * 16.0 - p.y) * tilesize - tilesize / 2.0;
+						rect.setPosition(xpos, ypos);
+
+						if (chunks[index]->tiles[x][y]->id)
+						{
+							light = 255 * ((getTileLight(x, y, -cx, -cy) + 1.0) / 16.0);
+							rect.setFillColor(sf::Color(light, light, light));
+							rect.setTexture(tex[chunks[index]->tiles[x][y]->id]);
+						}
+						else
+						{
+							light = 160 * ((getTileLight(x, y, -cx, -cy) + 1.0) / 16.0);
+							rect.setFillColor(sf::Color(light, light, light));
+							rect.setTexture(tex[chunks[index]->tilesf[x][y]->id]);
+						}
+						window.draw(rect);
+					}
+			}
+		}
+}
+
 
 void updateKey()
 {
@@ -1289,27 +1324,10 @@ void getkey()
 }
 
 
-int main()
+void loadGUI()
 {
-	// SETUP WINDOW ###############################################################################
-	window.setFramerateLimit(60);
-	window.setPosition(sf::Vector2i(window.getPosition().x, 0));
-	// ############################################################################################
-
-
-	// TEXTURES ###################################################################################
-	for (int i = 0; i < 256; i++)
-		tex[i] = new sf::Texture();
-	tex[0]->loadFromFile("res/blocks/air.png");
-	tex[1]->loadFromFile("res/blocks/stone.png");
-	tex[2]->loadFromFile("res/blocks/border.png");
-
-	font.loadFromFile("res/cas.ttf");
-	text.setFont(font);
-	// ############################################################################################
-
-
-	// MENU GUI ###################################################################################
+#pragma warning (push)
+#pragma warning (disable:4267)
 	std::fstream pages("res/menu.mnu", std::ios::in);
 	std::string data;
 	while (std::getline(pages, data))
@@ -1328,94 +1346,92 @@ int main()
 		}
 		case 'B' + 'T' + 'N':
 		{
-			int p[6];
+			int p[6] = {0, 0, 0, 0, 0, 0};
 			std::string str;
 			data.erase(0, 3);
 			for (int i = 0; i < 6; i++)
 			{
 				parselen = data.find(',');
 				p[i] = stoi(data.substr(0, parselen));
-				data.erase(0, parselen + 1);
+				data.erase(0, (double)parselen + 1);
 			}
 			parselen = data.find('"', 1);
-			str = data.substr(1, parselen - 1);
-			data.erase(0, parselen + 1);
+			str = data.substr(1, (double)parselen - 1);
+			data.erase(0, (double)parselen + 1);
 
 			for (int i = 0; i < str.length(); i++)
 				if (str[i] == '_')
 					str.replace(i, 1, " ");
-			Pages[Pages.size() - 1]->btn.push_back(new BTN(p[0] * 15, p[1] * 15, p[2] * 15, p[3] * 15, p[4], p[5], str));
+			Pages[Pages.size() - 1]->btn.push_back(new BTN(p[0], p[1], p[2], p[3], p[4], p[5], str));
 			break;
 		}
 		case 'T' + 'T' + 'L':
 		{
-			int p[5];
+			int p[5] = {0, 0, 0, 0, 0};
 			std::string str;
 			data.erase(0, 3);
 			for (int i = 0; i < 5; i++)
 			{
 				parselen = data.find(',');
 				p[i] = stoi(data.substr(0, parselen));
-				data.erase(0, parselen + 1);
+				data.erase(0, (double)parselen + 1);
 			}
 			parselen = data.find('"', 1);
-			str = data.substr(1, parselen - 1);
-			data.erase(0, parselen + 1);
+			str = data.substr(1, (double)parselen - 1);
+			data.erase(0, (double)parselen + 1);
 
 			for (int i = 0; i < str.length(); i++)
 				if (str[i] == '_')
 					str.replace(i, 1, " ");
-			Pages[Pages.size() - 1]->ttl.push_back(new TTL(p[0] * 15, p[1] * 15, p[2] * 15, p[3] * 15, p[4], str));
+			Pages[Pages.size() - 1]->ttl.push_back(new TTL(p[0], p[1], p[2], p[3], p[4], str));
 			break;
 		}
 		case 'L' + 'B' + 'L':
 		{
-			int p[5];
+			int p[5] = {0, 0, 0, 0, 0};
 			std::string str;
 			data.erase(0, 3);
 			for (int i = 0; i < 5; i++)
 			{
 				parselen = data.find(',');
 				p[i] = stoi(data.substr(0, parselen));
-				data.erase(0, parselen + 1);
+				data.erase(0, (double)parselen + 1);
 			}
 			parselen = data.find('"', 1);
-			str = data.substr(1, parselen - 1);
-			data.erase(0, parselen + 1);
+			str = data.substr(1, (double)parselen - 1);
+			data.erase(0, (double)parselen + 1);
 
 			for (int i = 0; i < str.length(); i++)
 				if (str[i] == '_')
 					str.replace(i, 1, " ");
-			Pages[Pages.size() - 1]->lbl.push_back(new LBL(p[0] * 15, p[1] * 15, p[2] * 15, p[3] * 15, p[4], str));
+			Pages[Pages.size() - 1]->lbl.push_back(new LBL(p[0], p[1], p[2], p[3], p[4], str));
 			break;
 		}
 		case 'S' + 'L' + 'D':
 		{
-			int p[7];
+			int p[7] = {0, 0, 0, 0, 0, 0, 0};
 			std::string str;
 			data.erase(0, 3);
 			for (int i = 0; i < 7; i++)
 			{
 				parselen = data.find(',');
 				p[i] = stoi(data.substr(0, parselen));
-				data.erase(0, parselen + 1.0);
+				data.erase(0, (double)parselen + 1.0);
 			}
 			parselen = data.find('"', 1);
-			str = data.substr(1, parselen - 1.0);
-			data.erase(0, parselen + 1.0);
+			str = data.substr(1, (double)parselen - 1.0);
+			data.erase(0, (double)parselen + 1.0);
 
 			for (int i = 0; i < str.length(); i++)
 				if (str[i] == '_')
 					str.replace(i, 1, " ");
-			Pages[Pages.size() - 1]->sld.push_back(new SLD(p[0] * 15, p[1] * 15, p[2] * 15, p[3] * 15, p[4], p[5], p[6], str));
+			Pages[Pages.size() - 1]->sld.push_back(new SLD(p[0], p[1], p[2], p[3], p[4], p[5], p[6], str));
 			break;
 		}
 		}
 	}
 	pages.close();
-	// ############################################################################################
 
-	// LOAD SETTINGS ##############################################################################
 	std::fstream set("res/settings.txt", std::ios::in);
 	if (set.is_open())
 	{
@@ -1429,7 +1445,6 @@ int main()
 		}
 	}
 	set.close();
-	// ############################################################################################
 
 	for (int y = 0; y < 3; y++)
 		for (int x = 0; x < 3; x++)
@@ -1439,49 +1454,5 @@ int main()
 
 	for (int x = 0; x < 2; x++)
 		guiEle.push_back(new InvElement(55 + x * 3, 36, 3, 9));
-
-	while (window.isOpen())
-	{
-		sf::Event event;
-		while (window.pollEvent(event))
-		{
-			if (event.type == sf::Event::Closed)
-				window.close();
-			if (event.type == sf::Event::GainedFocus)
-				focus = true;
-			if (event.type == sf::Event::LostFocus)
-				focus = false;
-			if (event.type == sf::Event::Resized)
-			{
-				width = std::floor(window.getSize().x / 2) * 2;
-				height = std::floor(window.getSize().y / 2) * 2;
-			}
-		}
-
-		now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
-		if (last == 0) 
-			last = now;
-		delta += now - last;
-		last = now;
-
-		while (delta >= tps)
-		{
-			delta -= tps;
-			ticks++;
-			update();
-		}
-
-		if (ingame)
-			render();
-		else
-			rmenu();
-
-		if (focus)
-		{
-			getkey();
-			updateKey();
-		}
-	}
-
-	return 0;
+#pragma warning (pop)
 }
