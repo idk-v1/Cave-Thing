@@ -1,7 +1,7 @@
 /*
 A shitty game that is sort of like Minecraft from a top down view, but I don't want to learn 3d maths.
 If you are reading this, good luck. This code follows the rule of "if it works, it works".
-- Ben Hamilton - Nov 28, 2022
+- Ben Hamilton - Nov 30, 2022
 Cleaned up
 */
 
@@ -64,7 +64,7 @@ std::vector<int>tmpsettings;
 std::vector<int>tmpsettingsid;
 
 int width = 960, height = 720, mwidth = 500, mheight = 500,
-	tps = 1000 / 20,
+	tps = 1000 / 60,
 	tilesize = 32, viewdist = 1, loaddist = 3,
 	pagenum = 0, invsel = -1,
 	sfx = 15, sfy = 15;
@@ -154,39 +154,28 @@ struct SLD
 
 struct PAGE
 {
-	std::vector<BTN*>btn;
-	std::vector<TTL*>ttl;
-	std::vector<LBL*>lbl;
-	std::vector<SLD*>sld;
+	std::vector<BTN>btn;
+	std::vector<TTL>ttl;
+	std::vector<LBL>lbl;
+	std::vector<SLD>sld;
 	//std::vector<>;
 	//std::vector<>;
 	int sel = 0;
 };
-std::vector<PAGE*>Pages;
+std::vector<PAGE>Pages;
 
 
 struct Chunk
 {
-	int x = 0, y = 0;
-	Tile** tiles[16];
-	Tile** tilesf[16];
+	int x, y;
+	Tile tilesf[16][16];
+	Tile tiles[16][16];
 	Chunk(int xp, int yp)
 	{
 		x = xp; y = yp;
-
-		for (int x = 0; x < 16; x++)
-		{
-			tiles[x] = new Tile*[16];
-			tilesf[x] = new Tile*[16];
-			for (int y = 0; y < 16; y++)
-			{
-				tiles[x][y] = new Tile;
-				tilesf[x][y] = new Tile;
-			}
-		}
 	}
 };
-std::vector<Chunk*> chunks;
+std::vector<Chunk> chunks;
 
 
 struct Player
@@ -236,6 +225,12 @@ void updateKey();
 void render();
 void rmenu();
 void update();
+void BTNevt(BTN);
+void renderBTN();
+void renderTTL();
+void renderLBL();
+void renderSLD();
+void animate();
 
 
 void render()
@@ -329,296 +324,6 @@ void render()
 	}
 
 	window.display();
-}
-
-
-void rmenu()
-{
-#pragma warning (push)
-#pragma warning (disable:4267)
-	rect.setFillColor(sf::Color(0, 0, 0, 32));
-	rect.setOutlineColor(sf::Color(0, 0, 0, 0));
-	rect.setPosition(0, 0);
-	rect.setSize(sf::Vector2f(width, height));
-	window.draw(rect);
-
-	if (Pages.size() > 0)
-	{
-		// DRAW BUTTON ###########################################################################
-		for (int i = 0; i < Pages[pagenum]->btn.size(); i++)
-		{
-			BTN btn = *Pages[pagenum]->btn[i];
-			btn.x *= sfx;
-			btn.y *= sfy;
-			btn.w *= sfx;
-			btn.h *= sfy;
-
-			btn.y += std::sin(ticks / 10.0) * sfy * 0.66 - sfy * 0.33;
-
-			if (mpos.x >= btn.x && mpos.x <= btn.x + btn.w && mpos.y >= btn.y && mpos.y <= btn.y + btn.h)
-			{
-				rect.setFillColor(sf::Color(224, 32, 32));
-				rect.setOutlineColor(sf::Color(255, 64, 64));
-				text.setFillColor(sf::Color(255, 64, 64));
-				btn.x -= sfx * 0.33; btn.y -= sfy * 0.33;
-				btn.w += sfx * 0.66; btn.h += sfy * 0.66;
-				btn.fs += sfx * 0.33;
-
-				// BUTTON EVENTS ##################################################################
-				if (!left && leftL)
-				{
-					if (btn.evt < 100 && btn.evt >= 0) // GOTO PAGE
-					{
-						pagenum = btn.evt;
-						tmpsettings.clear();
-						tmpsettingsid.clear();
-					}
-					if (btn.evt == 100) // EXIT
-						window.close();
-					if (btn.evt == 101) // CREATE WORLD
-					{
-						for (int f = 0; f < settingsid.size(); f++)
-						{
-							int val = -1;
-							for (int m = 0; m < Pages.size(); m++)
-							{
-								for (int d = 0; d < Pages[m]->sld.size(); d++)
-								{
-									if (settingsid[f] == Pages[m]->sld[d]->id)
-									{
-										SLD sld = *Pages[m]->sld[d];
-										int stops = 1, parselen;
-										std::vector<std::string>stop;
-										for (int s = 0; s < sld.str.length(); s++)
-											if (sld.str[s] == ',')
-												stops++;
-										for (int s = 0; s < stops + 1; s++)
-										{
-											parselen = sld.str.find(',');
-											if (parselen != std::string::npos)
-											{
-												stop.push_back(sld.str.substr(0, parselen));
-												sld.str.erase(0, (double)parselen + 1);
-											}
-										}
-										stop.push_back(sld.str);
-										val = stoi(stop[settings[f]]);
-									}
-								}
-							}
-
-							switch (settingsid[f])
-							{
-							case 0:
-								tilesize = val;
-								break;
-							case 1:
-								viewdist = val;
-								break;
-							case 2:
-								loaddist = val;
-							}
-						}
-						initGen();
-						p = Player();
-						ingame = true;
-					}
-					if (btn.evt == 102) // SAVE SETTINGS
-					{
-						// Check for duplicates and set values
-						for (int p = 0; p < tmpsettingsid.size(); p++)
-						{
-							int index = -1;
-							for (int s = 0; s < settingsid.size(); s++)
-								if (tmpsettingsid[p] == settingsid[s])
-									index = s;
-							if (index == -1)
-							{
-								settingsid.push_back(tmpsettingsid[p]);
-								settings.push_back(tmpsettings[p]);
-							}
-							else
-							{
-								settingsid[index] = tmpsettingsid[p];
-								settings[index] = tmpsettings[p];
-							}
-						}
-
-						std::string data;
-						std::fstream file("res/settings.txt", std::ios::out);
-						file << "";
-						for (int f = 0; f < settingsid.size(); f++)
-							file << settings[f] << ":" << settingsid[f] << "\n";
-						file.close();
-					}
-				}
-				// ################################################################################
-			}
-			else
-			{
-				rect.setFillColor(sf::Color(128, 128, 128));
-				rect.setOutlineColor(sf::Color(160, 160, 160));
-				text.setFillColor(sf::Color(160, 160, 160));
-			}
-
-			rect.setOutlineThickness(5);
-			rect.setSize(sf::Vector2f(btn.w, btn.h));
-			rect.setPosition(btn.x, btn.y);
-			rect.setTexture(tex[0]);
-			window.draw(rect);
-
-			text.setCharacterSize(btn.fs);
-			text.setString(btn.str);
-			text.setPosition(btn.x, btn.y);
-			text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5, 
-				rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - btn.fs * 0.25);
-			window.draw(text);
-		}
-		// ########################################################################################
-
-		// DRAW TITLE #############################################################################
-		for (int i = 0; i < Pages[pagenum]->ttl.size(); i++)
-		{
-			TTL ttl = *Pages[pagenum]->ttl[i];
-			ttl.x *= sfx;
-			ttl.y *= sfy;
-			ttl.w *= sfx;
-			ttl.h *= sfy;
-
-			ttl.y += std::sin(ticks / 10.0) * sfy * 0.66 - sfy * 0.33;
-
-			rect.setSize(sf::Vector2f(ttl.w, ttl.h));
-			rect.setPosition(ttl.x, ttl.y);
-
-			text.setFillColor(sf::Color(255, 64, 64));
-			text.setCharacterSize(ttl.fs);
-			text.setString(ttl.str);
-			text.setPosition(ttl.x, ttl.y);
-			text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5, rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - ttl.fs * 0.25);
-			window.draw(text);
-		}
-		// ########################################################################################
-
-		// DRAW LABEL #############################################################################
-		for (int i = 0; i < Pages[pagenum]->lbl.size(); i++)
-		{
-			LBL lbl = *Pages[pagenum]->lbl[i];
-			lbl.x *= sfx;
-			lbl.y *= sfy;
-			lbl.w *= sfx;
-			lbl.h *= sfy;
-
-			lbl.y += std::sin(ticks / 10.0) * sfy * 0.66 - sfy * 0.33;
-
-			rect.setSize(sf::Vector2f(lbl.w, lbl.h));
-			rect.setPosition(lbl.x, lbl.y);
-			rect.setFillColor(sf::Color(128, 128, 128));
-			rect.setOutlineColor(sf::Color(160, 160, 160));
-			window.draw(rect);
-
-			text.setFillColor(sf::Color(160, 160, 160));
-			text.setCharacterSize(lbl.fs);
-			text.setString(lbl.str);
-			text.setPosition(lbl.x, lbl.y);
-			text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5, rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - lbl.fs * 0.25);
-			window.draw(text);
-		}
-		// ########################################################################################
-
-		// DRAW SLIDER ############################################################################
-		for (int i = 0; i < Pages[pagenum]->sld.size(); i++)
-		{
-			SLD sld = *Pages[pagenum]->sld[i];
-			sld.x *= sfx;
-			sld.y *= sfy;
-			sld.w *= sfx;
-			sld.h *= sfy;
-
-			int index = -1;
-			for (int s = 0; s < tmpsettingsid.size(); s++)
-				if (tmpsettingsid[s] == sld.id)
-				{
-					sld.val = tmpsettings[s];
-					index = s;
-				}
-			if (index == -1)
-				for (int s = 0; s < settingsid.size(); s++)
-					if (settingsid[s] == sld.id)
-						sld.val = settings[s];
-			int stops = 1, parselen;
-			std::vector<std::string>stop;
-			for (int s = 0; s < sld.str.length(); s++)
-				if (sld.str[s] == ',')
-					stops++;
-			for (int s = 0; s < stops + 1; s++)
-			{
-				parselen = sld.str.find(',');
-				if (parselen != std::string::npos)
-				{
-					stop.push_back(sld.str.substr(0, parselen));
-					sld.str.erase(0, (double)parselen + 1);
-				}
-			}
-			stop.push_back(sld.str);
-
-			sld.y += std::sin(ticks / 10.0) * sfy * 0.66 - sfy * 0.33;
-
-			rect.setFillColor(sf::Color(128, 128, 128));
-			rect.setOutlineColor(sf::Color(160, 160, 160));
-			rect.setSize(sf::Vector2f(sld.w, sld.h - sfy * 2));
-			rect.setPosition(sld.x, sld.y + sfy);
-			window.draw(rect);
-
-			if (mpos.x >= sld.x + (double)sld.val * (1.0 / (stops - 1)) * sld.w - sfx * 2 && mpos.x <= sld.x + (double)sld.val * (1.0 / (stops - 1)) * sld.w - sfx * 2 + sfx * 4 && mpos.y >= sld.y && mpos.y <= sld.y + sld.h)
-			{
-				rect.setFillColor(sf::Color(224, 32, 32));
-				rect.setOutlineColor(sf::Color(255, 64, 64));
-			}
-
-			if (mpos.x >= sld.x && mpos.x <= sld.x + sld.w && mpos.y >= sld.y && mpos.y <= sld.y + sld.h)
-			{
-				if (left)
-				{
-					sld.val = std::min(int(mpos.x - sld.x) / (sld.w / stops), stops - 1);
-
-					int index = -1;
-					for (int s = 0; s < tmpsettingsid.size(); s++)
-						if (sld.id == tmpsettingsid[s])
-							index = s;
-					if (index == -1)
-					{
-						tmpsettingsid.push_back(sld.id);
-						tmpsettings.push_back(sld.val);
-					}
-					else
-					{
-						tmpsettingsid[index] = sld.id;
-						tmpsettings[index] = sld.val;
-					}
-				}
-			}
-			else
-			{
-				rect.setFillColor(sf::Color(128, 128, 128));
-				rect.setOutlineColor(sf::Color(160, 160, 160));
-			}
-
-			rect.setSize(sf::Vector2f(sfx * 4, sld.h));
-			rect.setPosition(sld.x + (double)sld.val * (1.0 / (stops - 1)) * sld.w - sfx * 2, sld.y);
-			window.draw(rect);
-
-			text.setFillColor(sf::Color(160, 160, 160));
-			text.setCharacterSize(sld.fs);
-			text.setString(stop[sld.val]);
-			text.setPosition(sld.x, sld.y);
-			text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5, rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - sld.fs * 0.25);
-			window.draw(text);
-		}
-		// ########################################################################################
-	}
-
-	window.display();
-#pragma warning (pop)
 }
 
 
@@ -960,7 +665,9 @@ int main()
 		{
 			delta -= tps;
 			ticks++;
-			update();
+			animate();
+			if (!(ticks % 3))
+				update();
 		}
 
 		if (ingame)
@@ -986,6 +693,12 @@ void save()
 
 
 void load()
+{
+
+}
+
+
+void animate()
 {
 
 }
@@ -1030,7 +743,7 @@ int getChunkID(int x, int y, int xc, int yc)
 	if (y >= 16) yy++;
 
 	for (int i = 0; i < chunks.size(); i++)
-		if (chunks[i]->x == xx && chunks[i]->y == yy)
+		if (chunks[i].x == xx && chunks[i].y == yy)
 			return i;
 	return -1;
 }
@@ -1047,7 +760,7 @@ int getTileID(int x, int y, int xc, int yc)
 		if (x >= 16) xx -= 16;
 		if (y < 0) yy += 16;
 		if (y >= 16) yy -= 16;
-		return chunks[i]->tiles[xx][yy]->id;
+		return chunks[i].tiles[xx][yy].id;
 	}
 	return -1;
 }
@@ -1064,7 +777,7 @@ void setTileID(int x, int y, int xc, int yc, int id)
 		if (x >= 16) xx -= 16;
 		if (y < 0) yy += 16;
 		if (y >= 16) yy -= 16;
-		chunks[i]->tiles[xx][yy]->id = id;
+		chunks[i].tiles[xx][yy].id = id;
 	}
 }
 
@@ -1080,7 +793,7 @@ int getTileLight(int x, int y, int xc, int yc)
 		if (x >= 16) xx -= 16;
 		if (y < 0) yy += 16;
 		if (y >= 16) yy -= 16;
-		return chunks[i]->tiles[xx][yy]->light;
+		return chunks[i].tiles[xx][yy].light;
 	}
 	return -1;
 }
@@ -1097,7 +810,7 @@ void setTileLight(int x, int y, int xc, int yc, int light)
 		if (x >= 16) xx -= 16;
 		if (y < 0) yy += 16;
 		if (y >= 16) yy -= 16;
-		chunks[i]->tiles[xx][yy]->light = light;
+		chunks[i].tiles[xx][yy].light = light;
 	}
 }
 
@@ -1133,7 +846,7 @@ void lightDiamond(int x, int y, int xc, int yc, int light)
 void generate(int xc, int yc)
 {
 	double noiseX, noiseY, noiseLvl;
-	Chunk* c = new Chunk(xc, yc);
+	Chunk c = Chunk(xc, yc);
 
 	for (int x = 0; x < 16; x++)
 		for (int y = 0; y < 16; y++)
@@ -1141,9 +854,9 @@ void generate(int xc, int yc)
 			noiseX = (xc * 16.0 + x) * 0.015625;
 			noiseY = (yc * 16.0 + y) * 0.015625;
 			noiseLvl = noise.unsignedFBM(noiseX, noiseY, 3, 2.5, 0.3) + 0.625;
-			c->tiles[x][y]->id = int(noiseLvl);
+			c.tiles[x][y].id = int(noiseLvl);
 
-			c->tilesf[x][y]->id = 1;
+			c.tilesf[x][y].id = 1;
 		}
 	chunks.push_back(c);
 }
@@ -1239,21 +952,21 @@ void renderTiles()
 				for (int x = 0; x < 16; x++)
 					for (int y = 0; y < 16; y++)
 					{
-						xpos = width / 2.0 + (chunks[index]->x * 16.0 + x + p.xc * 16.0 - p.x) * tilesize - tilesize / 2.0;
-						ypos = height / 2.0 + (chunks[index]->y * 16.0 + y + p.yc * 16.0 - p.y) * tilesize - tilesize / 2.0;
+						xpos = width / 2.0 + (chunks[index].x * 16.0 + x + p.xc * 16.0 - p.x) * tilesize - tilesize / 2.0;
+						ypos = height / 2.0 + (chunks[index].y * 16.0 + y + p.yc * 16.0 - p.y) * tilesize - tilesize / 2.0;
 						rect.setPosition(xpos, ypos);
 
-						if (chunks[index]->tiles[x][y]->id)
+						if (chunks[index].tiles[x][y].id)
 						{
 							light = 255 * ((getTileLight(x, y, -cx, -cy) + 1.0) / 16.0);
 							rect.setFillColor(sf::Color(light, light, light));
-							rect.setTexture(tex[chunks[index]->tiles[x][y]->id]);
+							rect.setTexture(tex[chunks[index].tiles[x][y].id]);
 						}
 						else
 						{
 							light = 160 * ((getTileLight(x, y, -cx, -cy) + 1.0) / 16.0);
 							rect.setFillColor(sf::Color(light, light, light));
-							rect.setTexture(tex[chunks[index]->tilesf[x][y]->id]);
+							rect.setTexture(tex[chunks[index].tilesf[x][y].id]);
 						}
 						window.draw(rect);
 					}
@@ -1341,7 +1054,7 @@ void loadGUI()
 		{
 		case 'N' + 'E' + 'W':
 		{
-			Pages.push_back(new PAGE);
+			Pages.push_back(PAGE());
 			break;
 		}
 		case 'B' + 'T' + 'N':
@@ -1362,7 +1075,7 @@ void loadGUI()
 			for (int i = 0; i < str.length(); i++)
 				if (str[i] == '_')
 					str.replace(i, 1, " ");
-			Pages[Pages.size() - 1]->btn.push_back(new BTN(p[0], p[1], p[2], p[3], p[4], p[5], str));
+			Pages[Pages.size() - 1].btn.push_back(BTN(p[0], p[1], p[2], p[3], p[4], p[5], str));
 			break;
 		}
 		case 'T' + 'T' + 'L':
@@ -1383,7 +1096,7 @@ void loadGUI()
 			for (int i = 0; i < str.length(); i++)
 				if (str[i] == '_')
 					str.replace(i, 1, " ");
-			Pages[Pages.size() - 1]->ttl.push_back(new TTL(p[0], p[1], p[2], p[3], p[4], str));
+			Pages[Pages.size() - 1].ttl.push_back(TTL(p[0], p[1], p[2], p[3], p[4], str));
 			break;
 		}
 		case 'L' + 'B' + 'L':
@@ -1404,7 +1117,7 @@ void loadGUI()
 			for (int i = 0; i < str.length(); i++)
 				if (str[i] == '_')
 					str.replace(i, 1, " ");
-			Pages[Pages.size() - 1]->lbl.push_back(new LBL(p[0], p[1], p[2], p[3], p[4], str));
+			Pages[Pages.size() - 1].lbl.push_back(LBL(p[0], p[1], p[2], p[3], p[4], str));
 			break;
 		}
 		case 'S' + 'L' + 'D':
@@ -1425,7 +1138,7 @@ void loadGUI()
 			for (int i = 0; i < str.length(); i++)
 				if (str[i] == '_')
 					str.replace(i, 1, " ");
-			Pages[Pages.size() - 1]->sld.push_back(new SLD(p[0], p[1], p[2], p[3], p[4], p[5], p[6], str));
+			Pages[Pages.size() - 1].sld.push_back(SLD(p[0], p[1], p[2], p[3], p[4], p[5], p[6], str));
 			break;
 		}
 		}
@@ -1455,4 +1168,313 @@ void loadGUI()
 	for (int x = 0; x < 2; x++)
 		guiEle.push_back(new InvElement(55 + x * 3, 36, 3, 9));
 #pragma warning (pop)
+}
+
+
+void BTNevt(BTN btn)
+{
+#pragma warning (push)
+#pragma warning (disable:4267)
+	if (btn.evt < 100 && btn.evt >= 0) // GOTO PAGE
+	{
+		pagenum = btn.evt;
+		tmpsettings.clear();
+		tmpsettingsid.clear();
+	}
+	if (btn.evt == 100) // EXIT
+		window.close();
+	if (btn.evt == 101) // CREATE WORLD
+	{
+		for (int f = 0; f < settingsid.size(); f++)
+		{
+			int val = -1;
+			for (int m = 0; m < Pages.size(); m++)
+			{
+				for (int d = 0; d < Pages[m].sld.size(); d++)
+				{
+					if (settingsid[f] == Pages[m].sld[d].id)
+					{
+						SLD sld = Pages[m].sld[d];
+						int stops = 1, parselen;
+						std::vector<std::string>stop;
+						for (int s = 0; s < sld.str.length(); s++)
+							if (sld.str[s] == ',')
+								stops++;
+						for (int s = 0; s < stops + 1; s++)
+						{
+							parselen = sld.str.find(',');
+							if (parselen != std::string::npos)
+							{
+								stop.push_back(sld.str.substr(0, parselen));
+								sld.str.erase(0, (double)parselen + 1);
+							}
+						}
+						stop.push_back(sld.str);
+						val = stoi(stop[settings[f]]);
+					}
+				}
+			}
+
+			switch (settingsid[f])
+			{
+			case 0:
+				tilesize = val;
+				break;
+			case 1:
+				viewdist = val;
+				break;
+			case 2:
+				loaddist = val;
+			}
+		}
+		initGen();
+		p = Player();
+		ingame = true;
+	}
+	if (btn.evt == 102) // SAVE SETTINGS
+	{
+		// Check for duplicates and set values
+		for (int p = 0; p < tmpsettingsid.size(); p++)
+		{
+			int index = -1;
+			for (int s = 0; s < settingsid.size(); s++)
+				if (tmpsettingsid[p] == settingsid[s])
+					index = s;
+			if (index == -1)
+			{
+				settingsid.push_back(tmpsettingsid[p]);
+				settings.push_back(tmpsettings[p]);
+			}
+			else
+			{
+				settingsid[index] = tmpsettingsid[p];
+				settings[index] = tmpsettings[p];
+			}
+		}
+
+		std::string data;
+		std::fstream file("res/settings.txt", std::ios::out);
+		file << "";
+		for (int f = 0; f < settingsid.size(); f++)
+			file << settings[f] << ":" << settingsid[f] << "\n";
+		file.close();
+	}
+#pragma warning (pop)
+}
+
+
+void renderBTN()
+{
+	for (int i = 0; i < Pages[pagenum].btn.size(); i++)
+	{
+		BTN btn = Pages[pagenum].btn[i];
+		btn.x *= sfx;
+		btn.y *= sfy;
+		btn.w *= sfx;
+		btn.h *= sfy;
+
+		btn.y += std::sin(ticks / 10.0 / 3.0) * sfy * 0.66 - sfy * 0.33;
+
+		if (mpos.x >= btn.x && mpos.x <= btn.x + btn.w && mpos.y >= btn.y && mpos.y <= btn.y + btn.h)
+		{
+			rect.setFillColor(sf::Color(224, 32, 32));
+			rect.setOutlineColor(sf::Color(255, 64, 64));
+			text.setFillColor(sf::Color(255, 64, 64));
+			btn.x -= sfx * 0.33; btn.y -= sfy * 0.33;
+			btn.w += sfx * 0.66; btn.h += sfy * 0.66;
+			btn.fs += sfx * 0.33;
+
+			if (!left && leftL)
+				BTNevt(btn);
+		}
+		else
+		{
+			rect.setFillColor(sf::Color(128, 128, 128));
+			rect.setOutlineColor(sf::Color(160, 160, 160));
+			text.setFillColor(sf::Color(160, 160, 160));
+		}
+
+		rect.setOutlineThickness(5);
+		rect.setSize(sf::Vector2f(btn.w, btn.h));
+		rect.setPosition(btn.x, btn.y);
+		rect.setTexture(tex[0]);
+		window.draw(rect);
+
+		text.setCharacterSize(btn.fs);
+		text.setString(btn.str);
+		text.setPosition(btn.x, btn.y);
+		text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5,
+			rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - btn.fs * 0.25);
+		window.draw(text);
+	}
+}
+
+
+void renderTTL()
+{
+	for (int i = 0; i < Pages[pagenum].ttl.size(); i++)
+	{
+		TTL ttl = Pages[pagenum].ttl[i];
+		ttl.x *= sfx;
+		ttl.y *= sfy;
+		ttl.w *= sfx;
+		ttl.h *= sfy;
+
+		ttl.y += std::sin(ticks / 10.0 / 3.0) * sfy * 0.66 - sfy * 0.33;
+
+		rect.setSize(sf::Vector2f(ttl.w, ttl.h));
+		rect.setPosition(ttl.x, ttl.y);
+
+		text.setFillColor(sf::Color(255, 64, 64));
+		text.setCharacterSize(ttl.fs);
+		text.setString(ttl.str);
+		text.setPosition(ttl.x, ttl.y);
+		text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5, rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - ttl.fs * 0.25);
+		window.draw(text);
+	}
+}
+
+
+void renderLBL()
+{
+	for (int i = 0; i < Pages[pagenum].lbl.size(); i++)
+	{
+		LBL lbl = Pages[pagenum].lbl[i];
+		lbl.x *= sfx;
+		lbl.y *= sfy;
+		lbl.w *= sfx;
+		lbl.h *= sfy;
+
+		lbl.y += std::sin(ticks / 10.0 / 3.0) * sfy * 0.66 - sfy * 0.33;
+
+		rect.setSize(sf::Vector2f(lbl.w, lbl.h));
+		rect.setPosition(lbl.x, lbl.y);
+		rect.setFillColor(sf::Color(128, 128, 128));
+		rect.setOutlineColor(sf::Color(160, 160, 160));
+		window.draw(rect);
+
+		text.setFillColor(sf::Color(160, 160, 160));
+		text.setCharacterSize(lbl.fs);
+		text.setString(lbl.str);
+		text.setPosition(lbl.x, lbl.y);
+		text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5, rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - lbl.fs * 0.25);
+		window.draw(text);
+	}
+}
+
+
+void renderSLD()
+{
+#pragma warning (push)
+#pragma warning (disable:4267)
+	for (int i = 0; i < Pages[pagenum].sld.size(); i++)
+	{
+		SLD sld = Pages[pagenum].sld[i];
+		sld.x *= sfx;
+		sld.y *= sfy;
+		sld.w *= sfx;
+		sld.h *= sfy;
+
+		int index = -1;
+		for (int s = 0; s < tmpsettingsid.size(); s++)
+			if (tmpsettingsid[s] == sld.id)
+			{
+				sld.val = tmpsettings[s];
+				index = s;
+			}
+		if (index == -1)
+			for (int s = 0; s < settingsid.size(); s++)
+				if (settingsid[s] == sld.id)
+					sld.val = settings[s];
+
+		int stops = 1, parselen;
+		std::vector<std::string>stop;
+		for (int s = 0; s < sld.str.length(); s++)
+			if (sld.str[s] == ',')
+				stops++;
+		for (int s = 0; s < stops + 1; s++)
+		{
+			parselen = sld.str.find(',');
+			if (parselen != std::string::npos)
+			{
+				stop.push_back(sld.str.substr(0, parselen));
+				sld.str.erase(0, (double)parselen + 1);
+			}
+		}
+		stop.push_back(sld.str);
+
+		sld.y += std::sin(ticks / 10.0 / 3.0) * sfy * 0.66 - sfy * 0.33;
+
+		rect.setFillColor(sf::Color(128, 128, 128));
+		rect.setOutlineColor(sf::Color(160, 160, 160));
+		rect.setSize(sf::Vector2f(sld.w, sld.h - sfy * 2));
+		rect.setPosition(sld.x, sld.y + sfy);
+		window.draw(rect);
+
+		if (mpos.x >= sld.x + (double)sld.val * (1.0 / (stops - 1)) * sld.w - sfx * 2 && mpos.x <= sld.x + (double)sld.val * (1.0 / (stops - 1)) * sld.w - sfx * 2 + sfx * 4 && mpos.y >= sld.y && mpos.y <= sld.y + sld.h)
+		{
+			rect.setFillColor(sf::Color(224, 32, 32));
+			rect.setOutlineColor(sf::Color(255, 64, 64));
+		}
+
+		if (mpos.x >= sld.x && mpos.x <= sld.x + sld.w && mpos.y >= sld.y && mpos.y <= sld.y + sld.h)
+		{
+			if (left)
+			{
+				sld.val = std::min(int(mpos.x - sld.x) / (sld.w / stops), stops - 1);
+
+				int index = -1;
+				for (int s = 0; s < tmpsettingsid.size(); s++)
+					if (sld.id == tmpsettingsid[s])
+						index = s;
+				if (index == -1)
+				{
+					tmpsettingsid.push_back(sld.id);
+					tmpsettings.push_back(sld.val);
+				}
+				else
+				{
+					tmpsettingsid[index] = sld.id;
+					tmpsettings[index] = sld.val;
+				}
+			}
+		}
+		else
+		{
+			rect.setFillColor(sf::Color(128, 128, 128));
+			rect.setOutlineColor(sf::Color(160, 160, 160));
+		}
+
+		rect.setSize(sf::Vector2f(sfx * 4, sld.h));
+		rect.setPosition(sld.x + (double)sld.val * (1.0 / (stops - 1)) * sld.w - sfx * 2, sld.y);
+		window.draw(rect);
+
+		text.setFillColor(sf::Color(160, 160, 160));
+		text.setCharacterSize(sld.fs);
+		text.setString(stop[sld.val]);
+		text.setPosition(sld.x, sld.y);
+		text.setPosition(rect.getGlobalBounds().left + rect.getGlobalBounds().width * 0.5 - text.getGlobalBounds().width * 0.5, rect.getGlobalBounds().top + rect.getGlobalBounds().height * 0.5 - text.getGlobalBounds().height * 0.5 - sld.fs * 0.25);
+		window.draw(text);
+	}
+#pragma warning (pop)
+}
+
+
+void rmenu()
+{
+	rect.setFillColor(sf::Color(0, 0, 0, 32));
+	rect.setOutlineColor(sf::Color(0, 0, 0, 0));
+	rect.setPosition(0, 0);
+	rect.setSize(sf::Vector2f(width, height));
+	window.draw(rect);
+
+	if (Pages.size() > 0)
+	{
+		renderBTN();
+		renderTTL();
+		renderLBL();
+		renderSLD();
+	}
+
+	window.display();
 }
