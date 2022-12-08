@@ -7,7 +7,7 @@
 
 int width = 1280, height = 720;
 bool focus = true;
-bool wk = 0, ak = 0, sk = 0, dk = 0;
+bool wk = 0, ak = 0, sk = 0, dk = 0, spacek = 0;
 long now, last = 0, dt = 0, ticks = 0, fps = 1000 / 60;
 int tileSize = 64, mapWidth = 50, mapHeight = 50, worldHeight = 5;
 int renderDist = 64;
@@ -61,43 +61,66 @@ void generate()
 
 void update()
 {
-    velx = (double(dk) - double(ak)) * 0.5;
-    vely = (double(sk) - double(wk)) * 0.5;
+    velx += (double(dk) - double(ak)) * 0.05;
+    vely += (double(sk) - double(wk)) * 0.05;
+
+    if (velx >= 0.1) velx = 0.1;
+    if (velx <= -0.1) velx = -0.1;
+    if (vely >= 0.1) vely = 0.1;
+    if (vely <= -0.1) vely = -0.1;
 
     if (getTile(posh - 1, posx, posy) != 2 && posh > 0)
         posh--;
 
-    // RIGHT
-    if (velx < 0)
-        for (int i = 0; i < std::abs(velx) * 10; i++)
-        {
-            if (getTile(posh, std::floor(posx - 0.1), std::floor(posy)) != 2 && getTile(posh, std::floor(posx - 0.1), std::ceil(posy + 0.99)) != 2)
-                posx -= 0.1;
-        }
-
     // LEFT
-    if (velx > 0)
-        for (int i = 0; i < std::abs(velx) * 10; i++)
+    if (velx < 0)
+        for (int i = 0; i < std::abs(velx) * 100; i++)
         {
-            if (getTile(posh, std::ceil(posx + 0.99 + 0.1), std::floor(posy)) != 2 && getTile(posh, std::ceil(posx + 0.99 + 0.1), std::ceil(posy + 0.99)) != 2)
-                posx += 0.1;
+            if (spacek || (getTile(posh, std::floor(posx - 0.4 - 0.01), std::floor(posy - 0.4)) != 2 && getTile(posh, std::floor(posx - 0.4 - 0.01), std::ceil(posy - 0.4)) != 2))
+                posx -= 0.01;
+            else velx = 0;
         }
 
-    for (int i = 0; i < std::abs(vely) * 10; i++)
-    {
-        int diry = (vely < 0 ? -1 : 1);
-            posy += 0.1 * diry;
-    }
 
-    velx /= 1.001;
-    vely /= 1.001;
+    // RIGHT
+    if (velx > 0)
+        for (int i = 0; i < std::abs(velx) * 100; i++)
+        {
+            if (spacek || (getTile(posh, std::floor(posx + 0.4 + 0.01), std::floor(posy - 0.4)) != 2 && getTile(posh, std::floor(posx + 0.4 + 0.01), std::ceil(posy - 0.4)) != 2))
+                posx += 0.01;
+            else
+                velx = 0;
+        }
 
-    if (posx + 0.5 >= mapWidth) posx = mapWidth - 0.5;
-    if (posy + 0.5 >= mapHeight) posy = mapHeight - 0.5;
-    if (posx - 0.5 < 0) posx = 0.5;
-    if (posy - 0.5 < 0) posy = 0.5;
+    // UP
+    if (vely < 0)
+        for (int i = 0; i < std::abs(vely) * 100; i++)
+        {
+            if (spacek || (getTile(posh, std::floor(posx - 0.4), std::floor(posy - 0.4 - 0.01)) != 2 && getTile(posh, std::ceil(posx - 0.4), std::floor(posy - 0.4 - 0.01)) != 2))
+                posy -= 0.01;
+            else vely = 0;
+        }
 
-    //std::cout << "POS - X: " << posx << " Y: " << posy << "\n";
+    // DOWN
+    if (vely > 0)
+        for (int i = 0; i < std::abs(vely) * 100; i++)
+        {
+            if (spacek || (getTile(posh, std::floor(posx - 0.4), std::ceil(posy - 0.6 + 0.01)) != 2 && getTile(posh, std::ceil(posx - 0.4), std::ceil(posy - 0.6 + 0.01)) != 2))
+                posy += 0.01;
+            else vely = 0;
+        }
+
+    velx /= 1.05;
+    vely /= 1.05;
+    if (std::abs(velx) < 0.01) velx = 0;
+    if (std::abs(vely) < 0.01) vely = 0;
+
+    if (posx + 0.4 >= mapWidth) posx = mapWidth - 0.4;
+    if (posy + 0.4 >= mapHeight) posy = mapHeight - 0.4;
+    if (posx - 0.4 < 0) posx = 0.4;
+    if (posy - 0.4 < 0) posy = 0.4;
+
+    //std::cout << "POS - L: " << posx - 0.4 << " R: " << posx + 0.4 << "\n";
 }
 
 
@@ -131,18 +154,23 @@ void render()
                 r = 128; g = 0; b = 128;
             }
             rect.setPosition(width / 2 - (-x + posx) * tileSize, height / 2 - (-y + posy) * tileSize);
-            rect.setSize(sf::Vector2f(tileSize, tileSize * 0.8));
+            rect.setSize(sf::Vector2f(tileSize, tileSize));
             rect.setFillColor(sf::Color(r + lvl * hgt, g + lvl * hgt, b + lvl * hgt));
             window.draw(rect);
-
-            rect.setPosition(width / 2 - (-x + posx) * tileSize, height / 2 - (-y + posy) * tileSize + 0.8 * tileSize);
-            rect.setSize(sf::Vector2f(tileSize, tileSize * 0.2));
-            rect.setFillColor(sf::Color(128 + lvl * hgt, 128 + lvl * hgt, 0 + lvl * hgt));
-            window.draw(rect);
+            if ((y == std::floor(posy - 0.4 - 0.01) && (x == std::floor(posx - 0.4) || x == std::ceil(posx - 0.4))) || (y == std::ceil(posy - 0.6 + 0.01) && (x == std::floor(posx - 0.4) || x == std::ceil(posx - 0.4))))
+            {
+                rect.setFillColor(sf::Color(255, 255, 0, 128));
+                window.draw(rect);
+            }
+            if ((x == std::floor(posx - 0.4 - 0.01) && (y == std::floor(posy - 0.4) || y == std::ceil(posy - 0.4))) || (x == std::floor(posx + 0.4 + 0.01) && (y == std::floor(posy - 0.4) || y == std::ceil(posy - 0.4))))
+            {
+                rect.setFillColor(sf::Color(255, 0, 0, 128));
+                window.draw(rect);
+            }
         }
 
-    rect.setSize(sf::Vector2f(tileSize, tileSize));
-    rect.setPosition(width / 2.0 - tileSize / 2.0, height / 2.0 - tileSize / 2.0);
+    rect.setSize(sf::Vector2f(tileSize * 0.8, tileSize * 0.8));
+    rect.setPosition(width / 2.0 - tileSize / 2 + 0.1 * tileSize, height / 2.0 - tileSize / 2 + 0.1 * tileSize);
     rect.setFillColor(sf::Color(128 + lvl * posh, 128 + lvl * posh, 128 + lvl * posh));
     window.draw(rect);
 
@@ -166,6 +194,8 @@ void getKeys(sf::Event event, bool down)
     case 03:
         dk = down;
         break;
+    case 57:
+        spacek = down;
     }
 }
 
