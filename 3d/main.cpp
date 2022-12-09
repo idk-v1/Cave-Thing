@@ -9,14 +9,27 @@ int width = 1280, height = 720;
 bool focus = true;
 bool wk = 0, ak = 0, sk = 0, dk = 0, spacek = 0;
 long now, last = 0, dt = 0, ticks = 0, fps = 1000 / 60;
-int tileSize = 64, mapWidth = 50, mapHeight = 50, worldHeight = 5;
-int renderDist = 64, jumpCD = 0;
+int tileSize = 64, mapWidth = 200, mapHeight = 50, worldHeight = 5;
+sf::RenderWindow window(sf::VideoMode(width, height), "Tiles");
+int renderDist = std::max(window.getSize().x / tileSize / 2, window.getSize().y / tileSize / 2) + 1;
 double posx = 1000, posy = 1000, posh = worldHeight - 1.0, velx = 0, vely = 0, playWidth = 0.8, step = 0.1, maxSpeed = 2.0;
+
+std::vector<std::string>ids = 
+{
+    "airTop",
+    "airSide",
+    "waterTop",
+    "waterSide",
+    "grassTop",
+    "grassSide",
+    "unknownTop",
+    "unknownSide"
+};
 
 SimplexNoise noise;
 
-sf::RenderWindow window(sf::VideoMode(width, height), "Tiles");
 sf::RectangleShape rect;
+std::vector<sf::Texture>tex;
 
 struct Tile
 {
@@ -40,6 +53,7 @@ void render();
 void update();
 void getKeys(sf::Event, bool);
 void init();
+sf::Texture createTex(std::string);
 
 
 int main()
@@ -77,6 +91,8 @@ int main()
                 sf::FloatRect visibleArea(0, 0, event.size.width, event.size.height);
                 window.setView(sf::View(visibleArea));
                 width = event.size.width; height = event.size.height;
+                std::cout << "Reccomended Render Distance: " << std::max(window.getSize().x / tileSize / 2, window.getSize().y / tileSize / 2) + 1 << '\n';
+                renderDist = std::max(window.getSize().x / tileSize / 2, window.getSize().y / tileSize / 2) + 1;
                 break;
             }
         }
@@ -98,6 +114,14 @@ int main()
 }
 
 
+sf::Texture createTex(std::string str)
+{
+    sf::Texture tmp;
+    tmp.loadFromFile("textures/" + str + ".png");
+    return tmp;
+}
+
+
 void init()
 {
     window.setFramerateLimit(60);
@@ -116,7 +140,12 @@ void init()
         tiles.push_back(vvt);
     }
 
+    for (int i = 0; i < ids.size(); i++)
+        tex.push_back(createTex(ids[i]));
+
     generate();
+
+    std::cout << "Reccomended Render Distance: " << std::max(window.getSize().x / tileSize / 2, window.getSize().y / tileSize / 2) << '\n';
 }
 
 
@@ -209,14 +238,21 @@ void move()
     if (vely >= maxSpeed) vely = maxSpeed;
     if (vely <= -maxSpeed) vely = -maxSpeed;
 
-    if (isTileMovable(posh - 1, posx / tileSize, posy / tileSize) && posh > 0)
+    if (isTileMovable(posh - 1, (posx - playWidth / 2 * tileSize) / tileSize, (posy - playWidth / 2 * tileSize) / tileSize) &&
+        isTileMovable(posh - 1, (posx + playWidth / 2 * tileSize) / tileSize, (posy - playWidth / 2 * tileSize) / tileSize) &&
+        isTileMovable(posh - 1, (posx + playWidth / 2 * tileSize) / tileSize, (posy + playWidth / 2 * tileSize) / tileSize) &&
+        isTileMovable(posh - 1, (posx - playWidth / 2 * tileSize) / tileSize, (posy + playWidth / 2 * tileSize) / tileSize) &&
+        posh > 0)
         posh--;
-    if (isTileSolid(posh, posx / tileSize, posy / tileSize))
+    if (isTileSolid(posh, (posx - playWidth / 2 * tileSize) / tileSize, (posy - playWidth / 2 * tileSize) / tileSize) ||
+        isTileSolid(posh, (posx + playWidth / 2 * tileSize) / tileSize, (posy - playWidth / 2 * tileSize) / tileSize) ||
+        isTileSolid(posh, (posx + playWidth / 2 * tileSize) / tileSize, (posy + playWidth / 2 * tileSize) / tileSize) ||
+        isTileSolid(posh, (posx - playWidth / 2 * tileSize) / tileSize, (posy + playWidth / 2 * tileSize) / tileSize))
         posh++;
     if (isTileLiquid(posh, posx / tileSize, posy / tileSize))
     {
-        velx /= 1.3;
-        vely /= 1.3;
+        velx /= 1.2;
+        vely /= 1.2;
     }
 
     double oldPosx = posx, oldPosy = posy;
@@ -225,96 +261,39 @@ void move()
     // RIGHT
     if (velx > 0)
         for (int i = 0; i < std::abs(velx) * 100; i++)
-        {
             if (isTileMovable(posh + 1, (posx + playWidth / 2 * tileSize + step) / tileSize, (posy + playWidth / 2 * tileSize) / tileSize) &&
                 isTileMovable(posh + 1, (posx + playWidth / 2 * tileSize + step) / tileSize, (posy - playWidth / 2 * tileSize) / tileSize))
-                if ((isTileMovable(posh, (posx + playWidth / 2 * tileSize + step) / tileSize, (posy + playWidth / 2 * tileSize) / tileSize) &&
-                     isTileMovable(posh, (posx + playWidth / 2 * tileSize + step) / tileSize, (posy - playWidth / 2 * tileSize) / tileSize)) || jumpCD <= 0)
-                {
-                    posx += step;
-                    if (isTileSolid(posh, posx / tileSize, posy / tileSize))
-                    {
-                        posh++;
-                        //jumpCD = 50;
-                    }
-                }
+                posx += step;
             else
                 velx = 0;
-        }
 
 
     // LEFT
     if (velx < 0)
         for (int i = 0; i < std::abs(velx) * 100; i++)
-        {
             if (isTileMovable(posh + 1, (posx - playWidth / 2 * tileSize - step) / tileSize, (posy + playWidth / 2 * tileSize) / tileSize) &&
                 isTileMovable(posh + 1, (posx - playWidth / 2 * tileSize - step) / tileSize, (posy - playWidth / 2 * tileSize) / tileSize))
-                if ((isTileMovable(posh, (posx - playWidth / 2 * tileSize - step) / tileSize, (posy + playWidth / 2 * tileSize) / tileSize) &&
-                     isTileMovable(posh, (posx - playWidth / 2 * tileSize - step) / tileSize, (posy - playWidth / 2 * tileSize) / tileSize)) || jumpCD <= 0)
-                {
-                    posx -= step;
-                    if (isTileSolid(posh, (posx - playWidth / 2 * tileSize - step) / tileSize, (posy + playWidth / 2 * tileSize) / tileSize) &&
-                        isTileSolid(posh, (posx - playWidth / 2 * tileSize - step) / tileSize, (posy - playWidth / 2 * tileSize) / tileSize))
-                    {
-                        posh++;
-                        //jumpCD = 50;
-                    }
-                }
+                posx -= step;
             else
                 velx = 0;
-        }
 
     // BOTTOM
     if (vely > 0)
         for (int i = 0; i < std::abs(vely) * 100; i++)
-        {
-            if (isTileMovable(posh + 1, (posx - playWidth / 2 * tileSize) / tileSize, (posy + playWidth / 2 * tileSize + step) / tileSize) && 
+            if (isTileMovable(posh + 1, (posx - playWidth / 2 * tileSize) / tileSize, (posy + playWidth / 2 * tileSize + step) / tileSize) &&
                 isTileMovable(posh + 1, (posx + playWidth / 2 * tileSize) / tileSize, (posy + playWidth / 2 * tileSize + step) / tileSize))
-                if ((isTileMovable(posh, (posx - playWidth / 2 * tileSize) / tileSize, (posy + playWidth / 2 * tileSize + step) / tileSize) &&
-                     isTileMovable(posh, (posx + playWidth / 2 * tileSize) / tileSize, (posy + playWidth / 2 * tileSize + step) / tileSize)) || jumpCD <= 0)
-                {
-                    posy += step;
-                    if (isTileSolid(posh, posx / tileSize, posy / tileSize))
-                    {
-                        posh++;
-                        //jumpCD = 50;
-                    }
-                }
+                posy += step;
             else
                 vely = 0;
-        }
 
     // TOP
     if (vely < 0)
         for (int i = 0; i < std::abs(vely) * 100; i++)
-        {
-            if (isTileMovable(posh + 1, (posx - playWidth / 2 * tileSize) / tileSize, (posy - playWidth / 2 * tileSize - step) / tileSize) && 
+            if (isTileMovable(posh + 1, (posx - playWidth / 2 * tileSize) / tileSize, (posy - playWidth / 2 * tileSize - step) / tileSize) &&
                 isTileMovable(posh + 1, (posx + playWidth / 2 * tileSize) / tileSize, (posy - playWidth / 2 * tileSize - step) / tileSize))
-                if ((isTileMovable(posh, (posx - playWidth / 2 * tileSize) / tileSize, (posy - playWidth / 2 * tileSize - step) / tileSize) &&
-                     isTileMovable(posh, (posx + playWidth / 2 * tileSize) / tileSize, (posy - playWidth / 2 * tileSize - step) / tileSize)) || jumpCD <= 0)
-                {
-                    posy -= step;
-                    if (isTileSolid(posh, posx / tileSize, posy / tileSize))
-                    {
-                        posh++;
-                        //jumpCD = 50;
-                    }
-                }
+                posy -= step;
             else
                 vely = 0;
-        }
-
-    if (oldPosx == posx && oldPosy == posy)
-    {
-        jumpCD--;
-        if (jumpCD < 0) jumpCD = 0;
-        std::cout << "jumpCD-- : " << jumpCD << "\n";
-    }
-    else
-    {
-        jumpCD = 50;
-    }
-
 
     velx /= 1.2;
     vely /= 1.2;
@@ -333,7 +312,8 @@ void render()
 {
 #pragma warning (push)
 #pragma warning (disable:4244)
-    int hgt, r, g, b, lvl = 128 / (worldHeight - 1);
+    int hgt, lvl = 128 / (worldHeight - 1);
+    bool draw;
     window.clear();
 
     for (int x = -renderDist + posx / tileSize; x <= renderDist + posx / tileSize; x++)
@@ -341,34 +321,74 @@ void render()
         {
             hgt = 0;
             for (int h = 0; h < worldHeight; h++)
-                if (getTile(h, x, y) > 0)
-                    hgt = h;
-            switch (getTile(hgt, x, y))
             {
-            case 0:
-                r = 0; g = 0; b = 0;
-                break;
-            case 1:
-                r = 0; g = 0; b = 128;
-                break;
-            case 2:
-                r = 0; g = 128; b = 0;
-                break;
-            case 3:
-                r = 128; g = 0; b = 0;
-                break;
-            default:
-                r = 128; g = 0; b = 128;
+                int id = getTile(h, x, y);
+                if (id > 0)
+                    hgt = h;
+                if (id == -1)
+                    hgt = 0;
             }
-            rect.setPosition(width / 2 + x * tileSize - posx, height / 2 + y * tileSize - posy);
-            rect.setSize(sf::Vector2f(tileSize, tileSize));
-            rect.setFillColor(sf::Color(r + lvl * hgt, g + lvl * hgt, b + lvl * hgt));
-            window.draw(rect);
+            for (int h = 0; h <= hgt; h++)
+            {
+                draw = true;
+                double hgtmod = 0;
+                switch (getTile(h, x, y))
+                {
+                case 0:
+                    draw = false;
+                    break;
+                case 1:
+                    hgtmod = -0.125;
+                    rect.setTexture(&tex[3.0 - (h == hgt)]);
+                    break;
+                case 2:
+                    rect.setTexture(&tex[5.0 - (h == hgt)]);
+                    break;
+                default:
+                    rect.setTexture(&tex[7.0 - (h == hgt)]);
+                }
+                if (draw)
+                {
+                    rect.setTextureRect(sf::IntRect(0, 0, 32, 32));
+                    rect.setPosition(width / 2.0 + x * tileSize - posx, height / 2.0 + y * tileSize - posy - h * tileSize * 0.125 + posh * tileSize * 0.125 - tileSize * hgtmod);
+                    rect.setSize(sf::Vector2f(tileSize, tileSize));
+                    rect.setFillColor(sf::Color(128 + lvl * hgt, 128 + lvl * hgt, 128 + lvl * hgt));
+                    window.draw(rect);
+                }
+                if (hgtmod < 0)
+                {
+                    draw = true;
+                    switch (getTile(h, x, y - 1))
+                    {
+                    case 0:
+                        draw = false;
+                        break;
+                    case 1:
+                        hgtmod = -0.125;
+                        rect.setTexture(&tex[3.0]);
+                        break;
+                    case 2:
+                        rect.setTexture(&tex[5.0]);
+                        break;
+                    default:
+                        rect.setTexture(&tex[7.0]);
+                    }
+                    if (draw)
+                    {
+                        rect.setTextureRect(sf::IntRect(0, 0, 32, 4));
+                        rect.setPosition(width / 2.0 + x * tileSize - posx, height / 2.0 + y * tileSize - posy - h * tileSize * 0.125 + posh * tileSize * 0.125);
+                        rect.setSize(sf::Vector2f(tileSize, tileSize * 0.125));
+                        rect.setFillColor(sf::Color(128 + lvl * hgt, 128 + lvl * hgt, 128 + lvl * hgt));
+                        window.draw(rect);
+                    }
+                }
+            }
         }
 
+    rect.setTexture(&tex[0]);
     rect.setSize(sf::Vector2f(playWidth * tileSize, playWidth * tileSize));
     rect.setPosition(width / 2.0 - playWidth * tileSize / 2, height / 2.0 - playWidth * tileSize / 2);
-    rect.setFillColor(sf::Color(96 + lvl * posh, 96 + lvl * posh, 69 + lvl * posh));
+    rect.setFillColor(sf::Color(96 + lvl * posh, 96 + lvl * posh, 96 + lvl * posh));
     window.draw(rect);
 
     window.display();
