@@ -14,22 +14,29 @@ sf::RenderWindow window(sf::VideoMode(width, height), "Tiles");
 int renderDist = std::max(window.getSize().x / tileSize / 2, window.getSize().y / tileSize / 2) + 1;
 double posx = 1000, posy = 1000, posh = worldHeight - 1.0, velx = 0, vely = 0, playWidth = 0.8, step = 0.1, maxSpeed = 2.0;
 
-std::vector<std::string>ids = 
+std::vector<std::string>ids =
 {
-    "airTop",
-    "airSide",
     "waterTop",
     "waterSide",
     "grassTop",
-    "grassSide",
-    "unknownTop",
-    "unknownSide"
+    "grassSide"
 };
+sf::Image missingImg, airImg;
+sf::Texture missingTex, airTex;
 
 SimplexNoise noise;
 
 sf::RectangleShape rect;
 std::vector<sf::Texture>tex;
+
+
+struct TileAttr
+{
+    std::string name = "ERR";
+    int id = -1, dropId = -1, damage = 1000, growth = -1, light = 0;
+    double fric = 1.0;
+};
+
 
 struct Tile
 {
@@ -91,7 +98,6 @@ int main()
                 sf::FloatRect visibleArea(0, 0, event.size.width, event.size.height);
                 window.setView(sf::View(visibleArea));
                 width = event.size.width; height = event.size.height;
-                std::cout << "Reccomended Render Distance: " << std::max(window.getSize().x / tileSize / 2, window.getSize().y / tileSize / 2) + 1 << '\n';
                 renderDist = std::max(window.getSize().x / tileSize / 2, window.getSize().y / tileSize / 2) + 1;
                 break;
             }
@@ -117,8 +123,10 @@ int main()
 sf::Texture createTex(std::string str)
 {
     sf::Texture tmp;
-    tmp.loadFromFile("textures/" + str + ".png");
-    return tmp;
+    if (tmp.loadFromFile("textures/" + str + ".png"))
+        return tmp;
+    else
+        return missingTex;
 }
 
 
@@ -140,12 +148,35 @@ void init()
         tiles.push_back(vvt);
     }
 
+    const unsigned int numPixels = 32 * 32;
+    sf::Uint8 pixels[4 * numPixels];
+    for (int i = 0; i < numPixels; i++)
+    {
+        int xval = i % 32;
+        int yval = i / 32;
+        bool val = ((xval % 16 < 8 && yval % 16 < 8) || (xval % 16 >= 8 && yval % 16 >= 8));
+
+        pixels[i * 4 + 0] = val * 255;
+        pixels[i * 4 + 1] = 0;
+        pixels[i * 4 + 2] = val * 255;
+        pixels[i * 4 + 3] = 255;
+    }
+    
+    missingImg.create(32, 32, pixels);
+    missingTex.create(32, 32);
+    missingTex.update(pixels);
+
+
+    for (int i = 0; i < numPixels * 4; i++)
+        pixels[i] = 255;
+    airImg.create(32, 32, pixels);
+    airTex.create(32, 32);
+    airTex.update(pixels);
+
     for (int i = 0; i < ids.size(); i++)
         tex.push_back(createTex(ids[i]));
 
     generate();
-
-    std::cout << "Reccomended Render Distance: " << std::max(window.getSize().x / tileSize / 2, window.getSize().y / tileSize / 2) << '\n';
 }
 
 
@@ -319,73 +350,76 @@ void render()
     for (int x = -renderDist + posx / tileSize; x <= renderDist + posx / tileSize; x++)
         for (int y = -renderDist + posy / tileSize; y <= renderDist + posy / tileSize; y++)
         {
-            hgt = 0;
-            for (int h = 0; h < worldHeight; h++)
+            if (x >= 0 && y >= 0 && x < mapWidth && y < mapHeight)
             {
-                int id = getTile(h, x, y);
-                if (id > 0)
-                    hgt = h;
-                if (id == -1)
-                    hgt = 0;
-            }
-            for (int h = 0; h <= hgt; h++)
-            {
-                draw = true;
-                double hgtmod = 0;
-                switch (getTile(h, x, y))
+                hgt = 0;
+                for (int h = 0; h < worldHeight; h++)
                 {
-                case 0:
-                    draw = false;
-                    break;
-                case 1:
-                    hgtmod = -0.125;
-                    rect.setTexture(&tex[3.0 - (h == hgt)]);
-                    break;
-                case 2:
-                    rect.setTexture(&tex[5.0 - (h == hgt)]);
-                    break;
-                default:
-                    rect.setTexture(&tex[7.0 - (h == hgt)]);
+                    int id = getTile(h, x, y);
+                    if (id > 0)
+                        hgt = h;
+                    if (id == -1)
+                        hgt = 0;
                 }
-                if (draw)
-                {
-                    rect.setTextureRect(sf::IntRect(0, 0, 32, 32));
-                    rect.setPosition(width / 2.0 + x * tileSize - posx, height / 2.0 + y * tileSize - posy - h * tileSize * 0.125 + posh * tileSize * 0.125 - tileSize * hgtmod);
-                    rect.setSize(sf::Vector2f(tileSize, tileSize));
-                    rect.setFillColor(sf::Color(128 + lvl * hgt, 128 + lvl * hgt, 128 + lvl * hgt));
-                    window.draw(rect);
-                }
-                if (hgtmod < 0)
+                for (int h = 0; h <= hgt; h++)
                 {
                     draw = true;
-                    switch (getTile(h, x, y - 1))
+                    double hgtmod = 0;
+                    switch (getTile(h, x, y))
                     {
                     case 0:
                         draw = false;
                         break;
                     case 1:
                         hgtmod = -0.125;
-                        rect.setTexture(&tex[3.0]);
+                        rect.setTexture(&tex[1.0 - (h == hgt)]);
                         break;
                     case 2:
-                        rect.setTexture(&tex[5.0]);
+                        rect.setTexture(&tex[3.0 - (h == hgt)]);
                         break;
                     default:
-                        rect.setTexture(&tex[7.0]);
+                        rect.setTexture(&missingTex);
                     }
                     if (draw)
                     {
-                        rect.setTextureRect(sf::IntRect(0, 0, 32, 4));
-                        rect.setPosition(width / 2.0 + x * tileSize - posx, height / 2.0 + y * tileSize - posy - h * tileSize * 0.125 + posh * tileSize * 0.125);
-                        rect.setSize(sf::Vector2f(tileSize, tileSize * 0.125));
+                        rect.setTextureRect(sf::IntRect(0, 0, 32, 32));
+                        rect.setPosition(width / 2.0 + double(x) * tileSize - posx, height / 2.0 + double(y) * tileSize - posy - double(h) * tileSize * 0.125 + posh * tileSize * 0.125 - tileSize * hgtmod);
+                        rect.setSize(sf::Vector2f(tileSize, tileSize));
                         rect.setFillColor(sf::Color(128 + lvl * hgt, 128 + lvl * hgt, 128 + lvl * hgt));
                         window.draw(rect);
+                    }
+                    if (hgtmod < 0)
+                    {
+                        draw = true;
+                        switch (getTile(h, x, y - 1))
+                        {
+                        case 0:
+                            draw = false;
+                            break;
+                        case 1:
+                            hgtmod = -0.125;
+                            rect.setTexture(&tex[1.0]);
+                            break;
+                        case 2:
+                            rect.setTexture(&tex[3.0]);
+                            break;
+                        default:
+                            rect.setTexture(&missingTex);
+                        }
+                        if (draw)
+                        {
+                            rect.setTextureRect(sf::IntRect(0, 0, 32, 4));
+                            rect.setPosition(width / 2.0 + double(x) * tileSize - posx, height / 2.0 + double(y) * tileSize - posy - double(h) * tileSize * 0.125 + posh * tileSize * 0.125);
+                            rect.setSize(sf::Vector2f(tileSize, tileSize * 0.125));
+                            rect.setFillColor(sf::Color(128 + lvl * hgt, 128 + lvl * hgt, 128 + lvl * hgt));
+                            window.draw(rect);
+                        }
                     }
                 }
             }
         }
 
-    rect.setTexture(&tex[0]);
+    rect.setTexture(&airTex);
     rect.setSize(sf::Vector2f(playWidth * tileSize, playWidth * tileSize));
     rect.setPosition(width / 2.0 - playWidth * tileSize / 2, height / 2.0 - playWidth * tileSize / 2);
     rect.setFillColor(sf::Color(96 + lvl * posh, 96 + lvl * posh, 96 + lvl * posh));
