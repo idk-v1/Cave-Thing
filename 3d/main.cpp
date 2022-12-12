@@ -9,10 +9,10 @@ int width = 1280, height = 720;
 bool focus = true;
 bool wk = 0, ak = 0, sk = 0, dk = 0, spacek = 0;
 long now, last = 0, dt = 0, ticks = 0, fps = 1000 / 60;
-int tileSize = 64, mapWidth = 200, mapHeight = 50, worldHeight = 5;
+int tileSize = 32, mapWidth = 200, mapHeight = 50, worldHeight = 6;
 sf::RenderWindow window(sf::VideoMode(width, height), "Tiles");
 int renderDist = std::max(window.getSize().x / tileSize / 2, window.getSize().y / tileSize / 2) + 1;
-double posx = 1000, posy = 1000, posh = worldHeight - 1.0, velx = 0, vely = 0, playWidth = 0.8, step = 0.1, maxSpeed = 2.0;
+double posx = tileSize * 25.0, posy = tileSize  * 25.0, posh = worldHeight - 1.0, velx = 0, vely = 0, playWidth = 0.8, step = 0.1, maxSpeed = 2.0;
 
 std::vector<std::string>ids =
 {
@@ -241,10 +241,10 @@ void generate()
     for (int x = 0; x < mapWidth; x++)
         for (int y = 0; y < mapHeight; y++)
         {
-            for (int h = 1; h < worldHeight; h++)
+            for (int h = 1; h < worldHeight - 1; h++)
                 setTile(h, x, y, 0);
             setTile(0, x, y, 1);
-            int hgt = std::floor(noise.unsignedFBM(x * 0.05, y * 0.05, 3, 0.5, 0.1) * worldHeight);
+            int hgt = std::floor(pow(noise.unsignedFBM(x * 0.05, y * 0.05, 5, 0.5, 0.15) * (worldHeight - 1.0), 3) / (worldHeight - 1.0) + 0.75) / (worldHeight - 1.0);
             for (int h = 0; h < hgt; h++)
                 setTile(h, x, y, 2);
         }
@@ -261,8 +261,8 @@ void move()
 {
 #pragma warning (push)
 #pragma warning (disable:4244)
-    velx += (double(dk) - double(ak)) * 0.1;
-    vely += (double(sk) - double(wk)) * 0.1;
+    velx += (double(dk) - double(ak)) * 0.0025 * tileSize;
+    vely += (double(sk) - double(wk)) * 0.0025  * tileSize;
 
     if (velx >= maxSpeed) velx = maxSpeed;
     if (velx <= -maxSpeed) velx = -maxSpeed;
@@ -367,6 +367,7 @@ void render()
                     double hgtmod = 0;
                     switch (getTile(h, x, y))
                     {
+                    case -1:
                     case 0:
                         draw = false;
                         break;
@@ -393,6 +394,7 @@ void render()
                         draw = true;
                         switch (getTile(h, x, y - 1))
                         {
+                        case -1:
                         case 0:
                             draw = false;
                             break;
